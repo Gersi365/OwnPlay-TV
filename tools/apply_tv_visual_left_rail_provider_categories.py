@@ -166,6 +166,24 @@ if management_before not in text:
     raise SystemExit("Provider category management block not found")
 text = text.replace(management_before, management_after, 1)
 
+series_before = '''Section("Provider categories")
+                Spacer(Modifier.width(18.dp))
+                Category("Provider category 01", true)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 02", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 03", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 03", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 05", false)'''
+series_after = '''Section("Provider categories")
+                Spacer(Modifier.width(18.dp))
+                Category("Provider category 01", true)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 02", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 03", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 04", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 05", false)'''
+if series_before not in text:
+    raise SystemExit("Series provider category block not found")
+text = text.replace(series_before, series_after, 1)
+
 text = text.replace(
     'RowItem("Custom groups", "Create and organize groups")',
     'RowItem("Custom groups", "Local personalization only")',
