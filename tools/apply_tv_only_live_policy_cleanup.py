@@ -289,7 +289,7 @@ browse_path = 'app/src/main/java/app/ownplay/player/ui/live/LiveBrowseScreen.kt'
 browse = read(browse_path)
 browse = replace_once(
     browse,
-    '    val listState = rememberLazyListState()\n\n    Surface(\n',
+    '    val listState = rememberLazyListState()\n    Surface(\n',
     '''    val listState = rememberLazyListState()\n    val favoriteOrderActions = editState.isEditing &&\n        state.query.favoritesOnly &&\n        state.query.order == LiveBrowseOrder.FAVORITE_ORDER\n\n    Surface(\n''',
     'LiveBrowse remote favorite order context',
 )
