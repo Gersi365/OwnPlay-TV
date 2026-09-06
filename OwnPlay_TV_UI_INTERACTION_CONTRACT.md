@@ -73,23 +73,28 @@ General rules:
 Primary navigation is:
 
 - Live;
-- Library;
+- Movies;
+- Series;
 - Settings.
+
+Primary navigation is a fixed vertical rail on the left side of the screen. The visible rail uses icons only; it must not render persistent destination text labels and must not move global navigation to the top of the screen. Accessible descriptions may identify icons without adding visible rail text.
 
 Primary navigation items must preserve:
 
-- minimum width;
+- fixed width and height;
 - shape;
 - padding;
-- icon/text layout.
+- icon size and position.
 
-Selected and focused states should be color-driven.
+Selected and focused states should be color-driven. Focus must not resize the rail or shift adjacent content. Left/Right transitions between the rail and page content must be deterministic, and returning from a subpage must restore the meaningful originating focus.
 
 Do not use scale animation as the primary focus treatment.
 
 ---
 
 # 5. Live Channel Browsing
+
+Provider-supplied categories are authoritative for provider content browsing. OwnPlay TV must not generate replacement content categories. Provider category labels and membership are displayed as supplied by the active provider, while supported local visibility/order personalization remains a separate layer. Favorites and Custom groups are local personalization concepts and must not be presented as provider categories.
 
 Channel rows/cards must preserve geometry while current/focused state changes.
 
@@ -198,6 +203,8 @@ Never show an exit confirmation while a deeper active layer still owns Back.
 # 11. Library & On-Demand
 
 Movies and Series must be remote-first and readable from distance.
+
+Movie and Series category browsing uses the active provider taxonomy when the provider exposes categories. OwnPlay TV must not synthesize generic replacement content categories. Continue Watching is a local progress surface outside the provider category taxonomy.
 
 Playback controls should be transient, consistent, and focus-safe.
 
