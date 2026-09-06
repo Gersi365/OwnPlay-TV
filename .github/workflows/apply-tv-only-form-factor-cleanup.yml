@@ -32,6 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sed -i "s/if 'isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:/if 'val isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:/" tools/apply_tv_only_form_factor_cleanup.py
           python3 tools/apply_tv_only_form_factor_cleanup.py
           rm tools/apply_tv_only_form_factor_cleanup.py
           rm .github/workflows/apply-tv-only-form-factor-cleanup.yml
