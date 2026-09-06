@@ -7,6 +7,10 @@ mkdir -p prototype-screenshots
 adb install -r "${QA_APK}"
 adb shell wm size 1920x1080
 adb shell wm density 240
+# Suppress Android's one-time immersive-mode education overlay so evidence contains only OwnPlay UI.
+adb shell settings put secure immersive_mode_confirmations confirmed || true
+adb shell input keyevent KEYCODE_BACK || true
+sleep 1
 
 capture() {
   local index="$1"
