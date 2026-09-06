@@ -62,12 +62,17 @@ private enum class TvSettingsPage {
     ABOUT,
 }
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun TvSettingsScreen(
     runtime: OwnPlayAppRuntime,
     summaries: List<PlaylistSourceSummary>,
     syncState: SourceSyncState,
+    activeSourceName: String?,
+    hasActivePlayback: Boolean,
+    onOpenLive: () -> Unit,
     onOpenSourceInLive: (String) -> Unit,
+    onStopPlayback: () -> Unit,
 ) {
     var page by remember { mutableStateOf(TvSettingsPage.ROOT) }
     var lastRootDestination by remember { mutableStateOf(TvSettingsDestination.PLAYLISTS) }

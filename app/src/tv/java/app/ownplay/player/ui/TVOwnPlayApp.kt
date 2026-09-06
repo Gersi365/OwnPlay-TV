@@ -502,7 +502,7 @@ private fun TVOwnPlayAppContent(
                     onFullscreenStateChanged = onPlaybackFullscreenChanged,
                 )
 
-                TVSection.SETTINGS -> SettingsScreen(
+                TVSection.SETTINGS -> TvSettingsScreen(
                     runtime = runtime,
                     summaries = summaries,
                     syncState = syncState,
