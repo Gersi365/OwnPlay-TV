@@ -101,10 +101,13 @@ Avoid:
 Primary navigation is:
 
 - **Live**
-- **Library**
+- **Movies**
+- **Series**
 - **Settings**
 
-Movies and Series remain first-class content experiences reached through Library/content navigation.
+Primary navigation is a fixed vertical rail on the left edge of the TV UI. The rail shows icons only; destination text labels are not persistently rendered in the rail. Global navigation must not be placed across the top of the screen.
+
+The rail must preserve fixed item geometry. Focus and selected destination state are expressed primarily through color and non-geometric emphasis.
 
 Primary navigation must be remote-friendly, focus-stable, and visually predictable.
 
@@ -166,12 +169,14 @@ Supported Live browse modes:
 Live browsing should preserve access to the established concepts where applicable:
 
 - Search;
-- Categories;
+- provider categories;
 - Favorites;
-- Sort/order;
-- Custom groups;
+- supported local sort/order;
+- Custom groups as local personalization;
 - View mode;
 - Channel selection.
+
+Provider category taxonomy is authoritative for provider content browsing. OwnPlay TV must not synthesize replacement content categories. When a provider exposes categories, the UI displays those provider-supplied category names and membership. Local personalization such as hiding, ordering, Favorites, or Custom groups remains separate from the provider taxonomy.
 
 Channel focus and current-channel state must preserve geometry.
 
@@ -293,6 +298,8 @@ Do not show exit confirmation while a deeper layer still owns Back.
 # 13. Library & On-Demand Playback
 
 Movies and Series should remain easy to browse with a remote and readable from TV viewing distance.
+
+Where the active provider exposes Movie or Series categories, those provider-supplied categories are the browsing taxonomy. OwnPlay TV must not invent generic replacement categories for Movies or Series. Continue Watching is a local progress surface and is not a provider category.
 
 On-demand playback should be video-first and consistent across Movies and Series episodes.
 
