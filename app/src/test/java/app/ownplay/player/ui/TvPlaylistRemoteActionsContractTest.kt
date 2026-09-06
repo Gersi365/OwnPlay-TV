@@ -52,6 +52,14 @@ class TvPlaylistRemoteActionsContractTest {
         assertTrue(playlistSource.contains("Delete playlist?"))
     }
 
+    @Test
+    fun sharedNonTvPlaylistPresentationRemainsAvailable() {
+        assertTrue(playlistSource.contains("if (remoteFirstActions) {"))
+        assertTrue(playlistSource.contains("OutlinedButton("))
+        assertTrue(playlistSource.contains("TextButton(onClick = onOpen"))
+        assertTrue(playlistSource.contains("remoteFirstActions: Boolean = false"))
+    }
+
     private fun sourceText(relativeToApp: String): String {
         val candidates = listOf(
             Path.of(relativeToApp),
