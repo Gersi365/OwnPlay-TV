@@ -1,0 +1,118 @@
+name: OwnPlay TV Visual Prototype Screenshots
+
+on:
+  push:
+    branches:
+      - 'agent/tv-restructure-visual-prototype'
+    paths:
+      - 'app/src/tvDebug/**'
+      - '.github/workflows/tv-visual-prototype-screenshots.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ownplay-tv-visual-prototype-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact prototype HEAD
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Build authorized emulator QA APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle :app:assembleTvDebug --stacktrace
+          apk="$(find app/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          test -n "${apk}"
+          echo "QA APK: ${apk}"
+          echo "QA_APK=${apk}" >> "${GITHUB_ENV}"
+
+      - name: Capture 1920x1080 OwnPlay TV screens
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            mkdir -p prototype-screenshots
+            adb install -r "${QA_APK}"
+            adb shell wm size 1920x1080
+            adb shell wm density 240
+
+            capture() {
+              index="$1"
+              screen="$2"
+              adb shell am force-stop app.ownplay.tv
+              adb shell am start -W -n app.ownplay.tv/app.ownplay.player.prototype.TvVisualPrototypeActivity --es screen "${screen}"
+              sleep 2
+              adb exec-out screencap -p > "prototype-screenshots/${index}_${screen}.png"
+            }
+
+            capture 01 live_categories
+            capture 02 live_channels_preview
+            capture 03 live_full
+            capture 04 live_full_epg
+            capture 05 movies
+            capture 06 movie_details
+            capture 07 movie_playback
+            capture 08 series
+            capture 09 series_details
+            capture 10 episodes
+            capture 11 series_playback
+            capture 12 settings
+            capture 13 playlists
+            capture 14 live_management
+            capture 15 backup_restore
+            capture 16 about
+
+      - name: Verify screenshot evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib
+          import struct
+
+          root = pathlib.Path('prototype-screenshots')
+          images = sorted(root.glob('*.png'))
+          if len(images) != 16:
+              raise SystemExit(f'Expected 16 screenshots, found {len(images)}')
+
+          for image in images:
+              data = image.read_bytes()
+              if data[:8] != b'\x89PNG\r\n\x1a\n':
+                  raise SystemExit(f'Invalid PNG: {image}')
+              width, height = struct.unpack('>II', data[16:24])
+              if (width, height) != (1920, 1080):
+                  raise SystemExit(f'Unexpected dimensions for {image}: {width}x{height}')
+              print(f'{image.name}: {width}x{height} ({len(data)} bytes)')
+          PY
+
+      - name: Upload screenshot set only
+        uses: actions/upload-artifact@v4
+        with:
+          name: ownplay-tv-restructure-visual-prototype
+          path: prototype-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 7
