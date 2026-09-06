@@ -51,20 +51,25 @@ internal fun LiveManagementScreen(
     runtime: OwnPlayAppRuntime,
     summaries: List<PlaylistSourceSummary>,
     onBack: () -> Unit,
-    focusBackOnEntry: Boolean = false,
+    focusPrimaryOnEntry: Boolean = false,
 ) {
     val configuration = LocalConfiguration.current
     val isTelevision =
         configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val backFocusRequester = remember { FocusRequester() }
+    val primaryFocusRequester = remember { FocusRequester() }
     var sourceId by remember(summaries) {
         mutableStateOf(summaries.firstOrNull()?.sourceId)
     }
     val selectedSourceId = sourceId
 
-    LaunchedEffect(isTelevision, focusBackOnEntry, selectedSourceId) {
-        if (isTelevision && focusBackOnEntry) {
-            backFocusRequester.requestFocus()
+    LaunchedEffect(isTelevision, focusPrimaryOnEntry, selectedSourceId) {
+        if (isTelevision && focusPrimaryOnEntry) {
+            if (selectedSourceId == null) {
+                backFocusRequester.requestFocus()
+            } else {
+                primaryFocusRequester.requestFocus()
+            }
         }
     }
 
@@ -314,6 +319,7 @@ internal fun LiveManagementScreen(
                 onSelected = { nextSourceId ->
                     sourceId = nextSourceId
                 },
+                modifier = Modifier.focusRequester(primaryFocusRequester),
             )
             TextButton(
                 onClick = onBack,
@@ -497,11 +503,15 @@ private fun ManagementSourceMenu(
     summaries: List<PlaylistSourceSummary>,
     selectedSourceId: String,
     onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selected = summaries.firstOrNull { it.sourceId == selectedSourceId }
     Box {
-        TextButton(onClick = { expanded = true }) {
+        TextButton(
+            onClick = { expanded = true },
+            modifier = modifier,
+        ) {
             Text(
                 text = selected?.name ?: "Source",
                 maxLines = 1,

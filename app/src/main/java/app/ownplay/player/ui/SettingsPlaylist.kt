@@ -36,16 +36,16 @@ internal fun PlaylistManagementSubscreen(
     syncState: SourceSyncState,
     onBack: () -> Unit,
     onOpenInLive: (String) -> Unit,
-    focusBackOnEntry: Boolean = false,
+    focusPrimaryOnEntry: Boolean = false,
 ) {
     val configuration = LocalConfiguration.current
     val isTelevision =
         configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val backFocusRequester = remember { FocusRequester() }
+    val contentFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(isTelevision, focusBackOnEntry) {
-        if (isTelevision && focusBackOnEntry) {
-            backFocusRequester.requestFocus()
+    LaunchedEffect(isTelevision, focusPrimaryOnEntry) {
+        if (isTelevision && focusPrimaryOnEntry) {
+            contentFocusRequester.requestFocus()
         }
     }
 
@@ -68,10 +68,7 @@ internal fun PlaylistManagementSubscreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                TextButton(
-                    onClick = onBack,
-                    modifier = Modifier.focusRequester(backFocusRequester),
-                ) { Text("‹ Settings") }
+                TextButton(onClick = onBack) { Text("‹ Settings") }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -93,6 +90,7 @@ internal fun PlaylistManagementSubscreen(
                 summaries = summaries,
                 syncState = syncState,
                 onOpenInLive = onOpenInLive,
+                initialFocusRequester = contentFocusRequester,
             )
         }
     }

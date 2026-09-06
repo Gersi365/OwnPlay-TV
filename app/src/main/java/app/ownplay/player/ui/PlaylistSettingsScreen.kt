@@ -33,6 +33,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +65,7 @@ internal fun PlaylistSettingsScreen(
     summaries: List<PlaylistSourceSummary>,
     syncState: SourceSyncState,
     onOpenInLive: (String) -> Unit,
+    initialFocusRequester: FocusRequester? = null,
 ) {
     val context = LocalContext.current
     val activePlaylistStore = remember(context) {
@@ -112,7 +115,14 @@ internal fun PlaylistSettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Button(onClick = { addMode = AddPlaylistMode.XTREAM }) {
+            Button(
+                onClick = { addMode = AddPlaylistMode.XTREAM },
+                modifier = if (initialFocusRequester != null) {
+                    Modifier.focusRequester(initialFocusRequester)
+                } else {
+                    Modifier
+                },
+            ) {
                 Text("Add playlist")
             }
         }

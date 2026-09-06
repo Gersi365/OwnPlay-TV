@@ -17,6 +17,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.backup.BackupExportResult
@@ -32,7 +34,9 @@ import kotlinx.coroutines.withContext
 private const val MAX_BACKUP_CHARS = 5_000_000
 
 @Composable
-internal fun BackupRestoreSettingsContent() {
+internal fun BackupRestoreSettingsContent(
+    initialFocusRequester: FocusRequester? = null,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val service = remember(context.applicationContext) {
@@ -97,6 +101,11 @@ internal fun BackupRestoreSettingsContent() {
             detail = "Personalization only · credentials excluded",
             actionLabel = "Export",
             onClick = { exportLauncher.launch("ownplay-personalization-v1.json") },
+            modifier = if (initialFocusRequester != null) {
+                Modifier.focusRequester(initialFocusRequester)
+            } else {
+                Modifier
+            },
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SettingsActionRow(

@@ -17,15 +17,20 @@ class TvSettingsPresentationContractTest {
 
     @Test
     fun tvRootContainsOnlyApprovedDestinationsInOrder() {
-        val playlists = tvSettingsSource.indexOf("title = \"Playlists\"")
-        val liveManagement = tvSettingsSource.indexOf("title = \"Live Management\"")
-        val backupRestore = tvSettingsSource.indexOf("title = \"Backup & Restore\"")
-        val about = tvSettingsSource.indexOf("title = \"About\"")
-
-        assertTrue(playlists >= 0)
-        assertTrue(playlists < liveManagement)
-        assertTrue(liveManagement < backupRestore)
-        assertTrue(backupRestore < about)
+        assertTrue(
+            tvSettingsSource.contains(
+                "private enum class TvSettingsDestination {\n" +
+                    "    PLAYLISTS,\n" +
+                    "    LIVE_MANAGEMENT,\n" +
+                    "    BACKUP_RESTORE,\n" +
+                    "    ABOUT,\n" +
+                    "}",
+            ),
+        )
+        assertTrue(tvSettingsSource.contains("title = \"Playlists\""))
+        assertTrue(tvSettingsSource.contains("title = \"Live Management\""))
+        assertTrue(tvSettingsSource.contains("title = \"Backup & Restore\""))
+        assertTrue(tvSettingsSource.contains("title = \"About\""))
         assertFalse(tvSettingsSource.contains("title = \"Interface\""))
         assertFalse(tvSettingsSource.contains("title = \"Downloads\""))
     }
@@ -72,6 +77,13 @@ class TvSettingsPresentationContractTest {
             tvSettingsSource.contains("color = if (focused)"),
         )
         assertFalse(tvSettingsSource.contains(".scale("))
+    }
+
+    @Test
+    fun tvSubpagesFocusMeaningfulContentInsteadOfBackOnEntry() {
+        assertTrue(tvSettingsSource.contains("focusPrimaryOnEntry = true"))
+        assertTrue(tvSettingsSource.contains("BackupRestoreSettingsContent(initialFocusRequester = backupFocusRequester)"))
+        assertTrue(tvSettingsSource.contains("(initialContentFocusRequester ?: backFocusRequester).requestFocus()"))
     }
 
     @Test

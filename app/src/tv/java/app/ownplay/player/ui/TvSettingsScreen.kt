@@ -114,22 +114,26 @@ internal fun TvSettingsScreen(
             syncState = syncState,
             onBack = { page = TvSettingsPage.ROOT },
             onOpenInLive = onOpenSourceInLive,
-            focusBackOnEntry = true,
+            focusPrimaryOnEntry = true,
         )
 
         TvSettingsPage.LIVE_MANAGEMENT -> LiveManagementScreen(
             runtime = runtime,
             summaries = summaries.filter { summary -> summary.enabled },
             onBack = { page = TvSettingsPage.ROOT },
-            focusBackOnEntry = true,
+            focusPrimaryOnEntry = true,
         )
 
-        TvSettingsPage.BACKUP_RESTORE -> TvSettingsInformationPage(
-            title = "Backup & Restore",
-            subtitle = "Create or restore supported local personalization.",
-            onBack = { page = TvSettingsPage.ROOT },
-        ) {
-            BackupRestoreSettingsContent()
+        TvSettingsPage.BACKUP_RESTORE -> {
+            val backupFocusRequester = remember { FocusRequester() }
+            TvSettingsInformationPage(
+                title = "Backup & Restore",
+                subtitle = "Create or restore supported local personalization.",
+                onBack = { page = TvSettingsPage.ROOT },
+                initialContentFocusRequester = backupFocusRequester,
+            ) {
+                BackupRestoreSettingsContent(initialFocusRequester = backupFocusRequester)
+            }
         }
 
         TvSettingsPage.ABOUT -> TvSettingsInformationPage(
@@ -362,12 +366,13 @@ private fun TvSettingsInformationPage(
     title: String,
     subtitle: String,
     onBack: () -> Unit,
+    initialContentFocusRequester: FocusRequester? = null,
     content: @Composable () -> Unit,
 ) {
     val backFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
-        backFocusRequester.requestFocus()
+    LaunchedEffect(initialContentFocusRequester) {
+        (initialContentFocusRequester ?: backFocusRequester).requestFocus()
     }
 
     Column(
@@ -384,7 +389,11 @@ private fun TvSettingsInformationPage(
         ) {
             TextButton(
                 onClick = onBack,
-                modifier = Modifier.focusRequester(backFocusRequester),
+                modifier = if (initialContentFocusRequester == null) {
+                    Modifier.focusRequester(backFocusRequester)
+                } else {
+                    Modifier
+                },
             ) {
                 Text("‹ Settings")
             }

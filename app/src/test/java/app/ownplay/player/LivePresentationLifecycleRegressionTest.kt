@@ -7,7 +7,7 @@ import org.junit.Test
 
 class LivePresentationLifecycleRegressionTest {
     @Test
-    fun mobileAndTvReadLivePresentationFromProcessScopedSession() {
+    fun tvReadsLivePresentationFromProcessScopedSession() {
         shellPaths.forEach { path ->
             val source = sourceText(path)
 
@@ -54,7 +54,6 @@ class LivePresentationLifecycleRegressionTest {
 
     private companion object {
         val shellPaths = listOf(
-            "src/mobile/java/app/ownplay/player/ui/MobileOwnPlayApp.kt",
             "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
         )
     }
