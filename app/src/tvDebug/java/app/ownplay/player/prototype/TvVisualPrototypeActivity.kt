@@ -18,11 +18,7 @@ class TvVisualPrototypeActivity : ComponentActivity() {
 
         val screen = intent.getStringExtra(EXTRA_SCREEN).orEmpty().ifBlank { "live_categories" }
         setContent {
-            if (screen == "about") {
-                TvOnlyAboutPrototype()
-            } else {
-                TvVisualPrototype(screen = screen)
-            }
+            TvVisualPrototype(screen = screen)
         }
     }
 
