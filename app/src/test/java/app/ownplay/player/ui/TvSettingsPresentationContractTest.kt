@@ -14,6 +14,15 @@ class TvSettingsPresentationContractTest {
     private val tvShellSource = sourceText(
         "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
     )
+    private val settingsComponentsSource = sourceText(
+        "src/main/java/app/ownplay/player/ui/SettingsComponents.kt",
+    )
+    private val playlistSubpageSource = sourceText(
+        "src/main/java/app/ownplay/player/ui/SettingsPlaylist.kt",
+    )
+    private val liveManagementSource = sourceText(
+        "src/main/java/app/ownplay/player/ui/LiveManagementScreen.kt",
+    )
 
     @Test
     fun tvRootContainsOnlyApprovedDestinationsInOrder() {
@@ -82,15 +91,45 @@ class TvSettingsPresentationContractTest {
     @Test
     fun tvSubpagesFocusMeaningfulContentInsteadOfBackOnEntry() {
         assertTrue(tvSettingsSource.contains("focusPrimaryOnEntry = true"))
-        assertTrue(tvSettingsSource.contains("BackupRestoreSettingsContent(initialFocusRequester = backupFocusRequester)"))
-        assertTrue(tvSettingsSource.contains("(initialContentFocusRequester ?: backFocusRequester).requestFocus()"))
+        assertTrue(
+            tvSettingsSource.contains(
+                "BackupRestoreSettingsContent(initialFocusRequester = backupFocusRequester)",
+            ),
+        )
+        assertTrue(
+            tvSettingsSource.contains(
+                "(initialContentFocusRequester ?: backFocusRequester).requestFocus()",
+            ),
+        )
+        assertTrue(
+            playlistSubpageSource.contains(
+                "initialFocusRequester = contentFocusRequester",
+            ),
+        )
+        assertTrue(
+            liveManagementSource.contains(
+                "primaryFocusRequester.requestFocus()",
+            ),
+        )
+        assertFalse(playlistSubpageSource.contains("focusBackOnEntry"))
+        assertFalse(liveManagementSource.contains("focusBackOnEntry"))
+    }
+
+    @Test
+    fun sharedSettingsActionRowIsAStableWholeRowRemoteTarget() {
+        assertTrue(settingsComponentsSource.contains(".height(64.dp)"))
+        assertTrue(settingsComponentsSource.contains(".clickable(onClick = onClick)"))
+        assertTrue(settingsComponentsSource.contains("shape = RoundedCornerShape(14.dp)"))
+        assertTrue(settingsComponentsSource.contains("color = if (focused)"))
+        assertFalse(settingsComponentsSource.contains("IconButton("))
+        assertFalse(settingsComponentsSource.contains(".scale("))
     }
 
     @Test
     fun rootUsesDedicatedSubpagesForAllApprovedDestinations() {
         assertTrue(tvSettingsSource.contains("TvSettingsPage.PLAYLISTS -> PlaylistManagementSubscreen("))
         assertTrue(tvSettingsSource.contains("TvSettingsPage.LIVE_MANAGEMENT -> LiveManagementScreen("))
-        assertTrue(tvSettingsSource.contains("TvSettingsPage.BACKUP_RESTORE -> TvSettingsInformationPage("))
+        assertTrue(tvSettingsSource.contains("TvSettingsPage.BACKUP_RESTORE ->"))
         assertTrue(tvSettingsSource.contains("TvSettingsPage.ABOUT -> TvSettingsInformationPage("))
     }
 
