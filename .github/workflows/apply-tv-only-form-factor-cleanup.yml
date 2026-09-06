@@ -118,6 +118,110 @@ jobs:
               view_modes,
               encoding='utf-8',
           )
+
+          # Live fullscreen entry reasons existed only to distinguish user entry from rotation entry.
+          # TV has no rotation-driven fullscreen, so session state only needs Preview/Fullscreen.
+          session_path = Path('app/src/main/java/app/ownplay/player/playback/LivePlaybackPresentationSession.kt')
+          session = session_path.read_text(encoding='utf-8')
+          session = replace_once(
+              session,
+              '    val fullscreenEntryReason: LiveFullscreenEntryReason? = null,\n',
+              '',
+              'remove fullscreen entry reason state',
+          )
+          session = replace_once(
+              session,
+              '''        require(surface == LivePlaybackPresentationSurface.FULLSCREEN || fullscreenEntryReason == null) {\n            "Fullscreen entry reason is only valid for fullscreen presentation"\n        }\n''',
+              '',
+              'remove fullscreen reason invariant',
+          )
+          session = replace_once(
+              session,
+              '''    fun showFullscreen(\n        selection: LivePlaybackSelection,\n        entryReason: LiveFullscreenEntryReason? = null,\n    ) {\n''',
+              '    fun showFullscreen(selection: LivePlaybackSelection) {\n',
+              'simplify fullscreen session API',
+          )
+          session = replace_once(
+              session,
+              '            fullscreenEntryReason = entryReason,\n',
+              '',
+              'remove fullscreen reason assignment',
+          )
+          if 'LiveFullscreenEntryReason' in session or 'fullscreenEntryReason' in session:
+              raise RuntimeError('Live session still contains rotation entry metadata')
+          session_path.write_text(session, encoding='utf-8')
+
+          Path('app/src/test/java/app/ownplay/player/playback/LivePlaybackPresentationSessionTest.kt').write_text('''package app.ownplay.player.playback\n\nimport org.junit.Assert.assertEquals\nimport org.junit.Assert.assertNull\nimport org.junit.Test\n\nclass LivePlaybackPresentationSessionTest {\n    @Test\n    fun previewStateIsRetainedUntilExplicitlyChanged() {\n        val session = LivePlaybackPresentationSession()\n        val selection = selection(channelId = "one")\n\n        session.showPreview(selection)\n\n        assertEquals(selection, session.state.value.selection)\n        assertEquals(LivePlaybackPresentationSurface.PREVIEW, session.state.value.surface)\n        assertNull(session.state.value.fullscreenSelection)\n    }\n\n    @Test\n    fun fullscreenStateIsRetainedUntilExplicitlyChanged() {\n        val session = LivePlaybackPresentationSession()\n        val selection = selection(channelId = "one")\n\n        session.showFullscreen(selection)\n\n        assertEquals(selection, session.state.value.fullscreenSelection)\n        assertEquals(LivePlaybackPresentationSurface.FULLSCREEN, session.state.value.surface)\n    }\n\n    @Test\n    fun navigationReplacesSelectionWithoutChangingPresentation() {\n        val session = LivePlaybackPresentationSession()\n        session.showFullscreen(selection(channelId = "one"))\n        val next = selection(channelId = "two")\n\n        session.replaceSelection(next)\n\n        assertEquals(next, session.state.value.selection)\n        assertEquals(LivePlaybackPresentationSurface.FULLSCREEN, session.state.value.surface)\n    }\n\n    @Test\n    fun returningToPreviewKeepsSelectionAndChangesSurface() {\n        val session = LivePlaybackPresentationSession()\n        val selection = selection(channelId = "one")\n        session.showFullscreen(selection)\n\n        session.showPreview(selection)\n\n        assertEquals(selection, session.state.value.selection)\n        assertEquals(LivePlaybackPresentationSurface.PREVIEW, session.state.value.surface)\n    }\n\n    @Test\n    fun clearRemovesTransientPresentation() {\n        val session = LivePlaybackPresentationSession()\n        session.showPreview(selection(channelId = "one"))\n\n        session.clear()\n\n        assertNull(session.state.value.selection)\n        assertNull(session.state.value.surface)\n    }\n\n    private fun selection(channelId: String): LivePlaybackSelection = LivePlaybackSelection(\n        request = PlaybackRequest(\n            sourceId = "source",\n            channelId = channelId,\n        ),\n        displayName = "Channel $channelId",\n    )\n}\n''', encoding='utf-8')
+
+          # Series catalog focus is always TV focus; remove the remaining device-type probe.
+          series_path = Path('app/src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt')
+          series = series_path.read_text(encoding='utf-8')
+          series_tv_block = '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n'''
+          series = replace_once(series, series_tv_block, '', 'Series catalog TV probe')
+          series = replace_once(
+              series,
+              '    LaunchedEffect(isTelevision, restoreFocusOnEntry, focusCategoryKey) {\n',
+              '    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {\n',
+              'Series TV focus effect',
+          )
+          series = replace_once(
+              series,
+              '        if (isTelevision && restoreFocusOnEntry) {\n',
+              '        if (restoreFocusOnEntry) {\n',
+              'Series TV focus condition',
+          )
+          if 'isTelevision' in series or 'LocalConfiguration' in series or 'UI_MODE_TYPE_TELEVISION' in series:
+              raise RuntimeError('SeriesRoute still contains device-type probing')
+          series_path.write_text(series, encoding='utf-8')
+
+          # VOD category and playback focus are always remote-first. Remove TV detection and touch wake.
+          vod_path = Path('app/src/main/java/app/ownplay/player/ui/vod/VodRoute.kt')
+          vod = vod_path.read_text(encoding='utf-8')
+          vod = vod.replace('import androidx.compose.foundation.gestures.detectTapGestures\n', '')
+          vod = vod.replace('import androidx.compose.ui.input.pointer.pointerInput\n', '')
+          vod_tv_block = '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK ==\n            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION\n'''
+          if vod.count(vod_tv_block) != 2:
+              raise RuntimeError(f'VOD TV probe: expected two matches, found {vod.count(vod_tv_block)}')
+          vod = vod.replace(vod_tv_block, '', 2)
+          vod = replace_once(
+              vod,
+              '    LaunchedEffect(isTelevision, restoreFocusOnEntry, focusCategoryKey) {\n',
+              '    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {\n',
+              'VOD category focus effect',
+          )
+          vod = replace_once(
+              vod,
+              '        if (isTelevision && focusCategoryKey != null) {\n',
+              '        if (focusCategoryKey != null) {\n',
+              'VOD category focus condition',
+          )
+          vod = replace_once(
+              vod,
+              '''    LaunchedEffect(isTelevision, controlsVisible, playbackState, movie.movieId) {\n        if (!isTelevision) return@LaunchedEffect\n''',
+              '    LaunchedEffect(controlsVisible, playbackState, movie.movieId) {\n',
+              'VOD playback focus effect',
+          )
+          vod = replace_once(
+              vod,
+              '    val remoteWakeModifier = if (isTelevision && !controlsVisible) {\n',
+              '    val remoteWakeModifier = if (!controlsVisible) {\n',
+              'VOD remote wake condition',
+          )
+          vod = replace_once(
+              vod,
+              '''                    if (\n                        isTelevision &&\n                        controlsVisible &&\n                        event.nativeKeyEvent.isRemoteNavigationKeyDown()\n                    ) {\n''',
+              '''                    if (\n                        controlsVisible &&\n                        event.nativeKeyEvent.isRemoteNavigationKeyDown()\n                    ) {\n''',
+              'VOD remote interaction condition',
+          )
+          vod = replace_once(
+              vod,
+              '''            Box(\n                modifier = Modifier\n                    .fillMaxSize()\n                    .pointerInput(movie.movieId, controlsVisible) {\n                        detectTapGestures {\n                            if (controlsVisible) {\n                                controlsVisible = false\n                            } else {\n                                revealControls()\n                            }\n                        }\n                    }\n                    .then(remoteWakeModifier),\n            )\n''',
+              '''            Box(\n                modifier = Modifier\n                    .fillMaxSize()\n                    .then(remoteWakeModifier),\n            )\n''',
+              'remove VOD touch wake surface',
+          )
+          if any(token in vod for token in ('isTelevision', 'LocalConfiguration', 'UI_MODE_TYPE_TELEVISION', 'detectTapGestures', 'pointerInput')):
+              raise RuntimeError('VodRoute still contains device-type or touch-only probing')
+          vod_path.write_text(vod, encoding='utf-8')
           PY
           rm tools/apply_tv_only_form_factor_cleanup.py
           rm .github/workflows/apply-tv-only-form-factor-cleanup.yml
@@ -133,8 +237,8 @@ jobs:
             echo 'Forbidden mobile/form-factor residue remains.' >&2
             exit 2
           fi
-          if grep -RInE 'Configuration\.ORIENTATION_(LANDSCAPE|PORTRAIT)|isLandscape|isPortrait' app/src/main/java; then
-            echo 'Forbidden runtime orientation branching remains.' >&2
+          if grep -RInE 'Configuration\.ORIENTATION_(LANDSCAPE|PORTRAIT)|isLandscape|isPortrait|UI_MODE_TYPE_TELEVISION|val isTelevision' app/src/main/java; then
+            echo 'Forbidden runtime form-factor/orientation branching remains.' >&2
             exit 3
           fi
 
