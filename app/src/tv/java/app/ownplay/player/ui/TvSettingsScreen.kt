@@ -156,7 +156,7 @@ private fun TvSettingsRoot(
     var focusedDestination by remember(initialFocusedDestination) {
         mutableStateOf(initialFocusedDestination)
     }
-    val enabledCount = summaries.count { summary -> summary.enabled }
+    val readyCount = summaries.count { summary -> summary.enabled }
 
     Row(
         modifier = Modifier
@@ -181,7 +181,7 @@ private fun TvSettingsRoot(
             TvSettingsRootRow(
                 icon = Icons.Filled.Folder,
                 title = "Playlists",
-                detail = "$enabledCount enabled",
+                detail = "$readyCount ready",
                 focused = focusedDestination == TvSettingsDestination.PLAYLISTS,
                 focusRequester = focusRequesters.getValue(TvSettingsDestination.PLAYLISTS),
                 onFocused = { focusedDestination = TvSettingsDestination.PLAYLISTS },
@@ -219,7 +219,7 @@ private fun TvSettingsRoot(
         TvSettingsContextPanel(
             destination = focusedDestination,
             configuredCount = summaries.size,
-            enabledCount = enabledCount,
+            readyCount = readyCount,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
@@ -302,7 +302,7 @@ private fun TvSettingsRootRow(
 private fun TvSettingsContextPanel(
     destination: TvSettingsDestination,
     configuredCount: Int,
-    enabledCount: Int,
+    readyCount: Int,
     modifier: Modifier = Modifier,
 ) {
     val title: String
@@ -312,13 +312,13 @@ private fun TvSettingsContextPanel(
     when (destination) {
         TvSettingsDestination.PLAYLISTS -> {
             title = "Playlists"
-            description = "Add, edit, refresh, enable and open the media sources used by OwnPlay TV."
-            status = "$configuredCount configured · $enabledCount enabled"
+            description = "Add, edit, refresh and open the media sources used by OwnPlay TV."
+            status = "$configuredCount configured · $readyCount ready"
         }
         TvSettingsDestination.LIVE_MANAGEMENT -> {
             title = "Live Management"
             description = "Organize Live categories and channels, hidden state, ordering and custom groups."
-            status = if (enabledCount > 0) "$enabledCount source(s) available" else "Add a playlist first"
+            status = if (readyCount > 0) "$readyCount source(s) ready" else "Add a playlist first"
         }
         TvSettingsDestination.BACKUP_RESTORE -> {
             title = "Backup & Restore"
