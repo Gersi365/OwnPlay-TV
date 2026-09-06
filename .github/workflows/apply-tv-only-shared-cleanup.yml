@@ -52,6 +52,17 @@ jobs:
           code = textwrap.dedent(workflow[start:end])
           exec(compile(code, str(workflow_path), 'exec'), {})
           PY
+          python3 - <<'PY'
+          from pathlib import Path
+
+          helper_path = Path('tools/apply_tv_only_shared_cleanup.py')
+          helper = helper_path.read_text(encoding='utf-8')
+          old = """text = remove_once(\n    text,\n    '''    val configuration = LocalConfiguration.current\\n    val isTelevision =\\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\\n''',\n    'Library root TV probe',\n)\n"""
+          new = """library_probe = '''    val configuration = LocalConfiguration.current\\n    val isTelevision =\\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\\n'''\nif text.count(library_probe) != 2:\n    raise RuntimeError(f'Library TV probes: expected two matches, found {text.count(library_probe)}')\ntext = text.replace(library_probe, '', 1)\n"""
+          if helper.count(old) != 1:
+              raise RuntimeError(f'Shared cleanup helper library patch expected one match, found {helper.count(old)}')
+          helper_path.write_text(helper.replace(old, new, 1), encoding='utf-8')
+          PY
           python3 tools/apply_tv_only_shared_cleanup.py
 
           rm tools/apply_tv_only_form_factor_cleanup.py
