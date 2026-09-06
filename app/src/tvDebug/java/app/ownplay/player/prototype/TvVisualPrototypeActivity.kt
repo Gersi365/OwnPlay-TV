@@ -1,6 +1,5 @@
 package app.ownplay.player.prototype
 
-import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,7 +10,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 class TvVisualPrototypeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -20,7 +18,11 @@ class TvVisualPrototypeActivity : ComponentActivity() {
 
         val screen = intent.getStringExtra(EXTRA_SCREEN).orEmpty().ifBlank { "live_categories" }
         setContent {
-            TvVisualPrototype(screen = screen)
+            if (screen == "about") {
+                TvOnlyAboutPrototype()
+            } else {
+                TvVisualPrototype(screen = screen)
+            }
         }
     }
 
