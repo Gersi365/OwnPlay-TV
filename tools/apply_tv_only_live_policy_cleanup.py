@@ -13,8 +13,8 @@ def write(path: str, text: str) -> None:
 
 def replace_count(text: str, old: str, new: str, expected: int, label: str) -> str:
     count = text.count(old)
-    if count != expected:
-        raise RuntimeError(f'{label}: expected {expected} matches, found {count}')
+    if count not in (0, expected):
+        raise RuntimeError(f'{label}: expected 0 or {expected} matches, found {count}')
     return text.replace(old, new)
 
 
