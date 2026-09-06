@@ -81,12 +81,12 @@ jobs:
           view_modes = original.replace('import android.content.res.Configuration\n', '')
           view_modes = view_modes.replace('import androidx.compose.ui.platform.LocalConfiguration\n', '')
           view_modes = view_modes.replace('PortraitLiveBrowseWithViewModes', 'TvLiveBrowseWithViewModes')
-          view_modes = replace_once(
-              view_modes,
-              '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n''',
-              '',
-              'view modes TV-only configuration',
-          )
+          form_factor_block = '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n'''
+          if view_modes.count(form_factor_block) != 2:
+              raise RuntimeError(
+                  f'view modes TV-only configuration: expected two matches, found {view_modes.count(form_factor_block)}',
+              )
+          view_modes = view_modes.replace(form_factor_block, '', 1)
           view_modes = view_modes.replace(
               '''    LaunchedEffect(searchExpanded, isTelevision) {\n        if (!isTelevision || !searchExpanded) return@LaunchedEffect\n''',
               '''    LaunchedEffect(searchExpanded) {\n        if (!searchExpanded) return@LaunchedEffect\n''',
@@ -108,7 +108,7 @@ jobs:
           )
           view_modes = replace_once(
               view_modes,
-              '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n    val cardMinSize = if (isTelevision) 176.dp else 156.dp\n''',
+              form_factor_block + '    val cardMinSize = if (isTelevision) 176.dp else 156.dp\n',
               '    val cardMinSize = 176.dp\n',
               'channel cards TV-only size',
           )
