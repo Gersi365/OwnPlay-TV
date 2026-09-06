@@ -38,7 +38,7 @@ jobs:
           from pathlib import Path
           import textwrap
 
-          workflow_path = Path('.github/workflows/apply-tv-only-form-factor-cleanup.yml')
+          workflow_path = Path('tools/tv_only_form_factor_cleanup_inline.yml')
           workflow = workflow_path.read_text(encoding='utf-8')
           start_marker = "          python3 - <<'PY'\n"
           end_marker = "          PY\n"
@@ -72,8 +72,23 @@ jobs:
           PY
           python3 tools/apply_tv_only_shared_cleanup.py
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for relative in (
+              'app/src/main/java/app/ownplay/player/ui/EpgGuideSheet.kt',
+              'app/src/main/java/app/ownplay/player/ui/library/LibraryContinueWatching.kt',
+              'app/src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt',
+          ):
+              path = Path(relative)
+              text = path.read_text(encoding='utf-8')
+              cleaned = '\n'.join(line.rstrip(' \t') for line in text.split('\n'))
+              path.write_text(cleaned, encoding='utf-8')
+          PY
+
           rm -f tools/apply_tv_only_form_factor_cleanup.py
           rm -f tools/apply_tv_only_shared_cleanup.py
+          rm -f tools/tv_only_form_factor_cleanup_inline.yml
           rm -f .github/workflows/apply-tv-only-form-factor-cleanup.yml
           rm -f .github/workflows/apply-tv-only-shared-cleanup.yml
           rm -f .github/workflows/audit-tv-only-form-factor.yml
