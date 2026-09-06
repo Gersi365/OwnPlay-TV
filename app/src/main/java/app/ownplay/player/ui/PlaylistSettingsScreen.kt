@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +70,7 @@ internal fun PlaylistSettingsScreen(
     onOpenInLive: (String) -> Unit,
     disabledSourceIds: Set<String> = emptySet(),
     onSetSourceEnabled: (String, Boolean) -> Unit = { _, _ -> },
+    remoteFirstActions: Boolean = false,
     initialFocusRequester: FocusRequester? = null,
 ) {
     val context = LocalContext.current
@@ -195,6 +199,7 @@ internal fun PlaylistSettingsScreen(
                 importQueued = summary.sourceId in pendingImportExecution.queuedSourceIds,
                 importActive = summary.sourceId in pendingImportExecution.activeSourceIds,
                 userEnabled = userEnabled,
+                remoteFirstActions = remoteFirstActions,
                 isActive = summary.enabled && userEnabled && summary.sourceId == activeSourceId,
                 onSetActive = {
                     scope.launch {
@@ -239,22 +244,45 @@ internal fun PlaylistSettingsScreen(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(
-                onClick = { addMode = AddPlaylistMode.XTREAM },
-                modifier = Modifier.weight(1f),
-            ) { Text("Xtream") }
-            OutlinedButton(
-                onClick = { addMode = AddPlaylistMode.REMOTE_M3U },
-                modifier = Modifier.weight(1f),
-            ) { Text("M3U URL") }
-            OutlinedButton(
-                onClick = { addMode = AddPlaylistMode.LOCAL_M3U },
-                modifier = Modifier.weight(1f),
-            ) { Text("File") }
+        if (remoteFirstActions) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlaylistRemoteActionRow(
+                    title = "Xtream",
+                    detail = "Server URL, username and password.",
+                    onClick = { addMode = AddPlaylistMode.XTREAM },
+                )
+                PlaylistRemoteActionRow(
+                    title = "M3U URL",
+                    detail = "Remote M3U or M3U8 playlist URL.",
+                    onClick = { addMode = AddPlaylistMode.REMOTE_M3U },
+                )
+                PlaylistRemoteActionRow(
+                    title = "Local M3U file",
+                    detail = "Choose a playlist with the Android document picker.",
+                    onClick = { addMode = AddPlaylistMode.LOCAL_M3U },
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { addMode = AddPlaylistMode.XTREAM },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Xtream") }
+                OutlinedButton(
+                    onClick = { addMode = AddPlaylistMode.REMOTE_M3U },
+                    modifier = Modifier.weight(1f),
+                ) { Text("M3U URL") }
+                OutlinedButton(
+                    onClick = { addMode = AddPlaylistMode.LOCAL_M3U },
+                    modifier = Modifier.weight(1f),
+                ) { Text("File") }
+            }
         }
     }
 
@@ -327,6 +355,7 @@ private fun PlaylistCard(
     importQueued: Boolean,
     importActive: Boolean,
     userEnabled: Boolean,
+    remoteFirstActions: Boolean,
     isActive: Boolean,
     onSetActive: () -> Unit,
     onOpen: () -> Unit,
@@ -428,23 +457,121 @@ private fun PlaylistCard(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                TextButton(onClick = onOpen, enabled = summary.enabled && userEnabled) { Text("Live") }
-                TextButton(onClick = onRefresh, enabled = !busy) {
-                    Text(if (summary.enabled) "Refresh" else "Retry")
-                }
-                TextButton(onClick = onEdit, enabled = summary.enabled && !syncing) { Text("Edit") }
-                TextButton(
-                    onClick = { onSetUserEnabled(!userEnabled) },
-                    enabled = summary.enabled && !syncing,
+            if (remoteFirstActions) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
-                    Text(if (userEnabled) "Disable" else "Enable")
+                    PlaylistRemoteActionRow(
+                        title = "Open in Live",
+                        detail = "Open this source in Live browsing.",
+                        enabled = summary.enabled && userEnabled,
+                        onClick = onOpen,
+                    )
+                    PlaylistRemoteActionRow(
+                        title = if (summary.enabled) "Refresh" else "Retry import",
+                        detail = if (summary.enabled) {
+                            "Refresh the imported catalog for this source."
+                        } else {
+                            "Retry the pending source import."
+                        },
+                        enabled = !busy,
+                        onClick = onRefresh,
+                    )
+                    PlaylistRemoteActionRow(
+                        title = "Edit source",
+                        detail = "Edit source name and connection details.",
+                        enabled = summary.enabled && !syncing,
+                        onClick = onEdit,
+                    )
+                    PlaylistRemoteActionRow(
+                        title = if (userEnabled) "Disable on TV" else "Enable on TV",
+                        detail = if (userEnabled) {
+                            "Keep source data but exclude it from TV use."
+                        } else {
+                            "Make this ready source available on TV again."
+                        },
+                        enabled = summary.enabled && !syncing,
+                        onClick = { onSetUserEnabled(!userEnabled) },
+                    )
+                    PlaylistRemoteActionRow(
+                        title = "Delete source",
+                        detail = "Open the existing delete confirmation for this source.",
+                        onClick = onDelete,
+                    )
                 }
-                TextButton(onClick = onDelete) { Text("Delete") }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    TextButton(onClick = onOpen, enabled = summary.enabled && userEnabled) { Text("Live") }
+                    TextButton(onClick = onRefresh, enabled = !busy) {
+                        Text(if (summary.enabled) "Refresh" else "Retry")
+                    }
+                    TextButton(onClick = onEdit, enabled = summary.enabled && !syncing) { Text("Edit") }
+                    TextButton(
+                        onClick = { onSetUserEnabled(!userEnabled) },
+                        enabled = summary.enabled && !syncing,
+                    ) {
+                        Text(if (userEnabled) "Disable" else "Enable")
+                    }
+                    TextButton(onClick = onDelete) { Text("Delete") }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistRemoteActionRow(
+    title: String,
+    detail: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    var focused by remember(title, enabled) { mutableStateOf(false) }
+    val highlighted = focused && enabled
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 0.dp,
+        color = when {
+            highlighted -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.64f)
+            enabled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f)
+        },
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = when {
+                    highlighted -> MaterialTheme.colorScheme.onPrimaryContainer
+                    enabled -> MaterialTheme.colorScheme.onSurface
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+                },
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = when {
+                    highlighted -> MaterialTheme.colorScheme.primary
+                    enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.46f)
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

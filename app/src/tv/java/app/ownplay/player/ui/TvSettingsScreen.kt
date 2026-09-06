@@ -119,6 +119,7 @@ internal fun TvSettingsScreen(
             onOpenInLive = onOpenSourceInLive,
             disabledSourceIds = disabledSourceIds,
             onSetSourceEnabled = onSetSourceEnabled,
+            remoteFirstActions = true,
             focusPrimaryOnEntry = true,
         )
 
