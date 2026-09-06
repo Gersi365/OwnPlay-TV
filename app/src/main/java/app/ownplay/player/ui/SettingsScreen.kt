@@ -97,7 +97,7 @@ internal fun SettingsScreen(
                 runtime = runtime,
                 summaries = readySummaries,
                 onBack = { destination = SettingsDestination.CONTENT },
-                focusBackOnEntry = true,
+                focusPrimaryOnEntry = true,
             )
             return
         }
@@ -108,7 +108,7 @@ internal fun SettingsScreen(
                 syncState = syncState,
                 onBack = { destination = SettingsDestination.CONTENT },
                 onOpenInLive = onOpenSourceInLive,
-                focusBackOnEntry = true,
+                focusPrimaryOnEntry = true,
             )
             return
         }
