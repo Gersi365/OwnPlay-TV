@@ -65,6 +65,8 @@ internal fun PlaylistSettingsScreen(
     summaries: List<PlaylistSourceSummary>,
     syncState: SourceSyncState,
     onOpenInLive: (String) -> Unit,
+    disabledSourceIds: Set<String> = emptySet(),
+    onSetSourceEnabled: (String, Boolean) -> Unit = { _, _ -> },
     initialFocusRequester: FocusRequester? = null,
 ) {
     val context = LocalContext.current
@@ -183,6 +185,7 @@ internal fun PlaylistSettingsScreen(
         }
 
         summaries.forEach { summary ->
+            val userEnabled = summary.sourceId !in disabledSourceIds
             PlaylistCard(
                 summary = summary,
                 syncState = sourceSyncStates[summary.sourceId] ?: SourceSyncState(
@@ -191,7 +194,8 @@ internal fun PlaylistSettingsScreen(
                 ),
                 importQueued = summary.sourceId in pendingImportExecution.queuedSourceIds,
                 importActive = summary.sourceId in pendingImportExecution.activeSourceIds,
-                isActive = summary.enabled && summary.sourceId == activeSourceId,
+                userEnabled = userEnabled,
+                isActive = summary.enabled && userEnabled && summary.sourceId == activeSourceId,
                 onSetActive = {
                     scope.launch {
                         val saved = activePlaylistStore.set(summary.sourceId)
@@ -204,6 +208,7 @@ internal fun PlaylistSettingsScreen(
                     }
                 },
                 onOpen = { onOpenInLive(summary.sourceId) },
+                onSetUserEnabled = { enabled -> onSetSourceEnabled(summary.sourceId, enabled) },
                 onRefresh = {
                     scope.launch {
                         if (summary.enabled) {
@@ -321,9 +326,11 @@ private fun PlaylistCard(
     syncState: SourceSyncState,
     importQueued: Boolean,
     importActive: Boolean,
+    userEnabled: Boolean,
     isActive: Boolean,
     onSetActive: () -> Unit,
     onOpen: () -> Unit,
+    onSetUserEnabled: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -375,6 +382,7 @@ private fun PlaylistCard(
                             queued -> "${sourceKindLabel(summary.sourceKind)} • Waiting to import…"
                             importFailed -> "${sourceKindLabel(summary.sourceKind)} • Import failed"
                             importing -> "${sourceKindLabel(summary.sourceKind)} • Waiting to import…"
+                            !userEnabled -> "${sourceKindLabel(summary.sourceKind)} • Disabled on TV"
                             else -> "${sourceKindLabel(summary.sourceKind)} • ${summary.channelCount} channels"
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -389,7 +397,7 @@ private fun PlaylistCard(
                     .fillMaxWidth()
                     .selectable(
                         selected = isActive,
-                        enabled = summary.enabled,
+                        enabled = summary.enabled && userEnabled,
                         role = Role.RadioButton,
                         onClick = onSetActive,
                     ),
@@ -399,7 +407,7 @@ private fun PlaylistCard(
                 RadioButton(
                     selected = isActive,
                     onClick = null,
-                    enabled = summary.enabled,
+                    enabled = summary.enabled && userEnabled,
                 )
                 Text(
                     text = when {
@@ -407,11 +415,12 @@ private fun PlaylistCard(
                         queued -> "Queued for import"
                         importFailed -> "Retry import before activating"
                         importing -> "Available after import"
+                        !userEnabled -> "Enable to use this playlist"
                         else -> "Use as active playlist"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = if (summary.enabled) {
+                    color = if (summary.enabled && userEnabled) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -423,11 +432,17 @@ private fun PlaylistCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TextButton(onClick = onOpen, enabled = summary.enabled) { Text("Live") }
+                TextButton(onClick = onOpen, enabled = summary.enabled && userEnabled) { Text("Live") }
                 TextButton(onClick = onRefresh, enabled = !busy) {
                     Text(if (summary.enabled) "Refresh" else "Retry")
                 }
                 TextButton(onClick = onEdit, enabled = summary.enabled && !syncing) { Text("Edit") }
+                TextButton(
+                    onClick = { onSetUserEnabled(!userEnabled) },
+                    enabled = summary.enabled && !syncing,
+                ) {
+                    Text(if (userEnabled) "Disable" else "Enable")
+                }
                 TextButton(onClick = onDelete) { Text("Delete") }
             }
         }

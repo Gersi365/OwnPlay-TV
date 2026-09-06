@@ -67,6 +67,8 @@ private enum class TvSettingsPage {
 internal fun TvSettingsScreen(
     runtime: OwnPlayAppRuntime,
     summaries: List<PlaylistSourceSummary>,
+    disabledSourceIds: Set<String>,
+    onSetSourceEnabled: (String, Boolean) -> Unit,
     syncState: SourceSyncState,
     activeSourceName: String?,
     hasActivePlayback: Boolean,
@@ -103,6 +105,7 @@ internal fun TvSettingsScreen(
     when (page) {
         TvSettingsPage.ROOT -> TvSettingsRoot(
             summaries = summaries,
+            disabledSourceIds = disabledSourceIds,
             initialFocusedDestination = lastRootDestination,
             focusRequesters = rootFocusRequesters,
             onOpen = ::open,
@@ -114,12 +117,16 @@ internal fun TvSettingsScreen(
             syncState = syncState,
             onBack = { page = TvSettingsPage.ROOT },
             onOpenInLive = onOpenSourceInLive,
+            disabledSourceIds = disabledSourceIds,
+            onSetSourceEnabled = onSetSourceEnabled,
             focusPrimaryOnEntry = true,
         )
 
         TvSettingsPage.LIVE_MANAGEMENT -> LiveManagementScreen(
             runtime = runtime,
-            summaries = summaries.filter { summary -> summary.enabled },
+            summaries = summaries.filter { summary ->
+                summary.enabled && summary.sourceId !in disabledSourceIds
+            },
             onBack = { page = TvSettingsPage.ROOT },
             focusPrimaryOnEntry = true,
         )
@@ -149,6 +156,7 @@ internal fun TvSettingsScreen(
 @Composable
 private fun TvSettingsRoot(
     summaries: List<PlaylistSourceSummary>,
+    disabledSourceIds: Set<String>,
     initialFocusedDestination: TvSettingsDestination,
     focusRequesters: Map<TvSettingsDestination, FocusRequester>,
     onOpen: (TvSettingsDestination) -> Unit,
@@ -157,6 +165,7 @@ private fun TvSettingsRoot(
         mutableStateOf(initialFocusedDestination)
     }
     val readyCount = summaries.count { summary -> summary.enabled }
+    val availableCount = resolveTvAvailableSourceIds(summaries, disabledSourceIds).size
 
     Row(
         modifier = Modifier
@@ -181,7 +190,7 @@ private fun TvSettingsRoot(
             TvSettingsRootRow(
                 icon = Icons.Filled.Folder,
                 title = "Playlists",
-                detail = "$readyCount ready",
+                detail = "$availableCount available",
                 focused = focusedDestination == TvSettingsDestination.PLAYLISTS,
                 focusRequester = focusRequesters.getValue(TvSettingsDestination.PLAYLISTS),
                 onFocused = { focusedDestination = TvSettingsDestination.PLAYLISTS },
@@ -220,6 +229,7 @@ private fun TvSettingsRoot(
             destination = focusedDestination,
             configuredCount = summaries.size,
             readyCount = readyCount,
+            availableCount = availableCount,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
@@ -303,6 +313,7 @@ private fun TvSettingsContextPanel(
     destination: TvSettingsDestination,
     configuredCount: Int,
     readyCount: Int,
+    availableCount: Int,
     modifier: Modifier = Modifier,
 ) {
     val title: String
@@ -313,12 +324,12 @@ private fun TvSettingsContextPanel(
         TvSettingsDestination.PLAYLISTS -> {
             title = "Playlists"
             description = "Add, edit, refresh and open the media sources used by OwnPlay TV."
-            status = "$configuredCount configured · $readyCount ready"
+            status = "$configuredCount configured · $readyCount ready · $availableCount available"
         }
         TvSettingsDestination.LIVE_MANAGEMENT -> {
             title = "Live Management"
             description = "Organize Live categories and channels, hidden state, ordering and custom groups."
-            status = if (readyCount > 0) "$readyCount source(s) ready" else "Add a playlist first"
+            status = if (availableCount > 0) "$availableCount source(s) available" else "Enable or add a playlist"
         }
         TvSettingsDestination.BACKUP_RESTORE -> {
             title = "Backup & Restore"

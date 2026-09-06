@@ -101,8 +101,14 @@ private fun TVOwnPlayAppContent(
     val activePlaylistStore = remember(context) {
         ActivePlaylistStore(context.applicationContext)
     }
+    val playlistAvailabilityStore = remember(context) {
+        TvPlaylistAvailabilityStore(context.applicationContext)
+    }
     val activePlaylistSelection by activePlaylistStore.observe().collectAsState(
         initial = ActivePlaylistSelection.Loading,
+    )
+    val disabledSourceIds by playlistAvailabilityStore.observeDisabledSourceIds().collectAsState(
+        initial = emptySet(),
     )
     val activePlaylistScope = rememberCoroutineScope()
     val summaries by runtime.observeSourceSummaries().collectAsState(initial = emptyList())
@@ -260,23 +266,22 @@ private fun TVOwnPlayAppContent(
         }
     }
 
-    LaunchedEffect(summaries, activePlaylistSelection) {
+    LaunchedEffect(summaries, activePlaylistSelection, disabledSourceIds) {
         val persistedSelection = activePlaylistSelection as? ActivePlaylistSelection.Ready
             ?: return@LaunchedEffect
-        val enabledSourceIds = summaries
-            .asSequence()
-            .filter { summary -> summary.enabled }
-            .map { summary -> summary.sourceId }
-            .toList()
+        val availableSourceIds = resolveTvAvailableSourceIds(
+            summaries = summaries,
+            disabledSourceIds = disabledSourceIds,
+        )
         val previousSourceId = activeSourceId
         val resolvedSourceId = resolveActivePlaylistId(
             persistedSourceId = persistedSelection.sourceId,
             currentSourceId = activeSourceId,
-            enabledSourceIds = enabledSourceIds,
+            availableSourceIds = availableSourceIds,
         )
         activeSourceId = resolvedSourceId
 
-        if (enabledSourceIds.isNotEmpty() && persistedSelection.sourceId != resolvedSourceId) {
+        if (availableSourceIds.isNotEmpty() && persistedSelection.sourceId != resolvedSourceId) {
             activePlaylistStore.set(resolvedSourceId)
         }
         if (resolvedSourceId != null && previousSourceId != resolvedSourceId) {
@@ -291,7 +296,7 @@ private fun TVOwnPlayAppContent(
         }
         val onDemandSourceId = runtime.onDemandPresentationSession.current.sourceId
         if (
-            enabledSourceIds.isNotEmpty() &&
+            availableSourceIds.isNotEmpty() &&
             resolvedSourceId != null &&
             onDemandSourceId != null &&
             onDemandSourceId != resolvedSourceId
@@ -369,7 +374,11 @@ private fun TVOwnPlayAppContent(
         return
     }
 
-    val activeSummary = summaries.firstOrNull { it.sourceId == activeSourceId && it.enabled }
+    val activeSummary = summaries.firstOrNull { summary ->
+        summary.sourceId == activeSourceId &&
+            summary.enabled &&
+            summary.sourceId !in disabledSourceIds
+    }
     val librarySectionActive =
         section == TVSection.LIBRARY ||
             section == TVSection.MOVIES ||
@@ -505,6 +514,12 @@ private fun TVOwnPlayAppContent(
                 TVSection.SETTINGS -> TvSettingsScreen(
                     runtime = runtime,
                     summaries = summaries,
+                    disabledSourceIds = disabledSourceIds,
+                    onSetSourceEnabled = { sourceId, enabled ->
+                        activePlaylistScope.launch {
+                            playlistAvailabilityStore.setEnabled(sourceId, enabled)
+                        }
+                    },
                     syncState = syncState,
                     activeSourceName = activeSummary?.name,
                     hasActivePlayback =

@@ -36,6 +36,8 @@ internal fun PlaylistManagementSubscreen(
     syncState: SourceSyncState,
     onBack: () -> Unit,
     onOpenInLive: (String) -> Unit,
+    disabledSourceIds: Set<String> = emptySet(),
+    onSetSourceEnabled: (String, Boolean) -> Unit = { _, _ -> },
     focusPrimaryOnEntry: Boolean = false,
 ) {
     val configuration = LocalConfiguration.current
@@ -90,6 +92,8 @@ internal fun PlaylistManagementSubscreen(
                 summaries = summaries,
                 syncState = syncState,
                 onOpenInLive = onOpenInLive,
+                disabledSourceIds = disabledSourceIds,
+                onSetSourceEnabled = onSetSourceEnabled,
                 initialFocusRequester = contentFocusRequester,
             )
         }
