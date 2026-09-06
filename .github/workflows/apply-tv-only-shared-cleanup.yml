@@ -71,6 +71,7 @@ jobs:
           helper_path.write_text(helper, encoding='utf-8')
           PY
           python3 tools/apply_tv_only_shared_cleanup.py
+          python3 tools/apply_tv_only_live_policy_cleanup.py
 
           python3 - <<'PY'
           from pathlib import Path
@@ -88,6 +89,7 @@ jobs:
 
           rm -f tools/apply_tv_only_form_factor_cleanup.py
           rm -f tools/apply_tv_only_shared_cleanup.py
+          rm -f tools/apply_tv_only_live_policy_cleanup.py
           rm -f tools/tv_only_form_factor_cleanup_inline.yml
           rm -f .github/workflows/apply-tv-only-form-factor-cleanup.yml
           rm -f .github/workflows/apply-tv-only-shared-cleanup.yml
