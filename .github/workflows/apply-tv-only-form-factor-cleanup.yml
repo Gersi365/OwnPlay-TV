@@ -34,6 +34,91 @@ jobs:
           set -euo pipefail
           sed -i "s/if 'isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:/if 'val isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:/" tools/apply_tv_only_form_factor_cleanup.py
           python3 tools/apply_tv_only_form_factor_cleanup.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected one match, found {count}')
+              return text.replace(old, new, 1)
+
+          hierarchy_path = Path('app/src/main/java/app/ownplay/player/ui/live/LiveBrowseHierarchy.kt')
+          hierarchy = hierarchy_path.read_text(encoding='utf-8')
+          hierarchy = hierarchy.replace('import android.content.res.Configuration\n', '')
+          hierarchy = hierarchy.replace('import androidx.compose.ui.platform.LocalConfiguration\n', '')
+          hierarchy = hierarchy.replace(
+              ' * [LiveBrowseHierarchyPolicy] and is applied by LiveRoute. Non-TV callers remain on the established\n * browse behavior and do not receive TV focus fallback semantics.\n',
+              ' * [LiveBrowseHierarchyPolicy] and is applied by LiveRoute.\n',
+          )
+          hierarchy = replace_once(
+              hierarchy,
+              '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n    val useTvFocusFallback = isTelevision && channelFocusRequester != null\n''',
+              '    val useTvFocusFallback = channelFocusRequester != null\n',
+              'hierarchy TV-only focus fallback',
+          )
+          hierarchy = hierarchy.replace('PortraitLiveBrowseWithViewModes(', 'TvLiveBrowseWithViewModes(')
+          hierarchy = hierarchy.replace('showCategoryStrip = !isTelevision,', 'showCategoryStrip = false,')
+          hierarchy = replace_once(
+              hierarchy,
+              '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n''',
+              '',
+              'category TV-only configuration',
+          )
+          hierarchy = hierarchy.replace(
+              '''    LaunchedEffect(\n        isTelevision,\n        preferredCategoryKey,\n        preferredCategoryIndex,\n        state.categories,\n    ) {\n        if (!isTelevision || preferredCategoryKey == null || preferredCategoryIndex < 0) {\n''',
+              '''    LaunchedEffect(\n        preferredCategoryKey,\n        preferredCategoryIndex,\n        state.categories,\n    ) {\n        if (preferredCategoryKey == null || preferredCategoryIndex < 0) {\n''',
+          )
+          if 'isTelevision' in hierarchy or 'Portrait' in hierarchy or 'LocalConfiguration' in hierarchy:
+              raise RuntimeError('LiveBrowseHierarchy still contains form-factor branching')
+          hierarchy_path.write_text(hierarchy, encoding='utf-8')
+
+          original = subprocess.check_output(
+              ['git', 'show', 'HEAD:app/src/main/java/app/ownplay/player/ui/live/PortraitLiveViewModes.kt'],
+              text=True,
+          )
+          view_modes = original.replace('import android.content.res.Configuration\n', '')
+          view_modes = view_modes.replace('import androidx.compose.ui.platform.LocalConfiguration\n', '')
+          view_modes = view_modes.replace('PortraitLiveBrowseWithViewModes', 'TvLiveBrowseWithViewModes')
+          view_modes = replace_once(
+              view_modes,
+              '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n''',
+              '',
+              'view modes TV-only configuration',
+          )
+          view_modes = view_modes.replace(
+              '''    LaunchedEffect(searchExpanded, isTelevision) {\n        if (!isTelevision || !searchExpanded) return@LaunchedEffect\n''',
+              '''    LaunchedEffect(searchExpanded) {\n        if (!searchExpanded) return@LaunchedEffect\n''',
+          )
+          view_modes = view_modes.replace(
+              '''    LaunchedEffect(playingChannelId, isTelevision) {\n        if (isTelevision && playingChannelId != null) {\n''',
+              '''    LaunchedEffect(playingChannelId) {\n        if (playingChannelId != null) {\n''',
+          )
+          view_modes = view_modes.replace(
+              'enabled = isTelevision && searchExpanded && playingChannelId == null,',
+              'enabled = searchExpanded && playingChannelId == null,',
+          )
+          view_modes = view_modes.replace('tvFocusManagement = isTelevision,', 'tvFocusManagement = true,')
+          view_modes = replace_once(
+              view_modes,
+              '''                modifier = Modifier\n                    .fillMaxWidth()\n                    .padding(horizontal = 14.dp, vertical = 6.dp)\n                    .then(\n                        if (isTelevision) {\n                            Modifier\n                                .focusRequester(searchFieldFocusRequester)\n                                .onPreviewKeyEvent { event ->\n                                    when {\n                                        event.type == KeyEventType.KeyDown &&\n                                            event.key == Key.DirectionUp -> {\n                                            searchTriggerFocusRequester.requestFocus()\n                                            true\n                                        }\n                                        event.type == KeyEventType.KeyDown &&\n                                            event.key == Key.DirectionDown &&\n                                            state.channels.isNotEmpty() &&\n                                            channelFocusRequester != null -> {\n                                            channelFocusRequester.requestFocus()\n                                            true\n                                        }\n                                        else -> false\n                                    }\n                                }\n                        } else {\n                            Modifier\n                        },\n                    ),\n''',
+              '''                modifier = Modifier\n                    .fillMaxWidth()\n                    .padding(horizontal = 14.dp, vertical = 6.dp)\n                    .focusRequester(searchFieldFocusRequester)\n                    .onPreviewKeyEvent { event ->\n                        when {\n                            event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp -> {\n                                searchTriggerFocusRequester.requestFocus()\n                                true\n                            }\n                            event.type == KeyEventType.KeyDown &&\n                                event.key == Key.DirectionDown &&\n                                state.channels.isNotEmpty() &&\n                                channelFocusRequester != null -> {\n                                channelFocusRequester.requestFocus()\n                                true\n                            }\n                            else -> false\n                        }\n                    },\n''',
+              'search field TV-only focus modifier',
+          )
+          view_modes = replace_once(
+              view_modes,
+              '''    val configuration = LocalConfiguration.current\n    val isTelevision =\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\n    val cardMinSize = if (isTelevision) 176.dp else 156.dp\n''',
+              '    val cardMinSize = 176.dp\n',
+              'channel cards TV-only size',
+          )
+          if 'isTelevision' in view_modes or 'Portrait' in view_modes or 'LocalConfiguration' in view_modes or 'Configuration.ORIENTATION_' in view_modes:
+              raise RuntimeError('TV Live view modes still contain form-factor branching')
+          Path('app/src/main/java/app/ownplay/player/ui/live/TvLiveViewModes.kt').write_text(
+              view_modes,
+              encoding='utf-8',
+          )
+          PY
           rm tools/apply_tv_only_form_factor_cleanup.py
           rm .github/workflows/apply-tv-only-form-factor-cleanup.yml
           git diff --check
@@ -43,6 +128,7 @@ jobs:
           grep -Fq 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
           test -f app/src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt
           test -f app/src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveViewModes.kt
           if grep -RInE 'create\("mobile"\)|app\.ownplay\.mobile|IS_TV_BUILD|TARGET_DEVICE|AppDeviceProfile|AppOrientation|SMARTPHONE|TOUCHSCREEN|PORTRAIT|PortraitLive|SettingsLandscape|PictureInPicture|rotationFullscreen|GestureDetector|dispatchTouchEvent' app/src app/build.gradle.kts; then
             echo 'Forbidden mobile/form-factor residue remains.' >&2
             exit 2
