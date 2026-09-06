@@ -1,0 +1,90 @@
+name: Materialize Approved OwnPlay TV UI Reference
+
+on:
+  push:
+    branches:
+      - 'agent/approved-ui-reference-cleanup'
+    paths:
+      - '.github/workflows/materialize-approved-ui-reference.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cleanup branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/approved-ui-reference-cleanup
+          fetch-depth: 1
+
+      - name: Materialize approved source and remove obsolete references
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 tools/apply_tv_visual_left_rail_provider_categories.py
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('OwnPlay_TV_SOURCE.md')
+          source_text = source.read_text(encoding='utf-8')
+          source_replacements = {
+              '- Offline filtering in Library;': '- Offline filtering in Movies or Series;',
+              '- nested Library screen → previous Library level;': '- nested Movies or Series screen → previous level;',
+              '# 13. Library & On-Demand Playback': '# 13. Movies, Series & On-Demand Playback',
+          }
+          for old, new in source_replacements.items():
+              if old not in source_text:
+                  raise SystemExit(f'Missing durable source anchor: {old}')
+              source_text = source_text.replace(old, new)
+          source.write_text(source_text, encoding='utf-8')
+
+          workflow = Path('OwnPlay_TV_ENGINEERING_WORKFLOW.md')
+          workflow_text = workflow.read_text(encoding='utf-8')
+          old_scope = '''Do not refactor unrelated modules merely for consistency.\n\nDo not modify inactive legacy code solely because it contains outdated visual patterns.'''
+          new_scope = '''Do not refactor unrelated modules merely for consistency.\n\nOnce an approved TV presentation replaces an older presentation or reference path, remove the superseded presentation/reference scaffolding rather than preserving it only because it is inactive. Active behavior must be migrated and validated before its previous execution path is deleted. Preserve domain, provider, playback, persistence, and migration logic unless the approved TV behavior genuinely requires a change.'''
+          if old_scope not in workflow_text:
+              raise SystemExit('Missing engineering scope anchor')
+          workflow.write_text(workflow_text.replace(old_scope, new_scope), encoding='utf-8')
+
+          obsolete = [
+              Path('app/src/tvDebug/java/app/ownplay/player/prototype/TvOnlyAboutPrototype.kt'),
+              Path('tools/apply_tv_visual_left_rail_provider_categories.py'),
+              Path('tools/capture_tv_visual_prototype.sh'),
+              Path('.github/workflows/tv-visual-prototype-screenshots.yml'),
+              Path('.github/workflows/materialize-approved-ui-reference.yml'),
+          ]
+          for path in obsolete:
+              if path.exists():
+                  path.unlink()
+
+          prototype = Path('app/src/tvDebug/java/app/ownplay/player/prototype/TvVisualPrototypeScreens.kt').read_text(encoding='utf-8')
+          if 'private fun PrimaryRail' not in prototype:
+              raise SystemExit('Approved left rail was not materialized')
+          for forbidden in ('TopBar(', 'Nav("Live"', 'Nav("Movies"', 'Nav("Series"', 'Nav("Settings"'):
+              if forbidden in prototype:
+                  raise SystemExit(f'Legacy top navigation remains: {forbidden}')
+          import re
+          if re.search(r'\bAll\b', prototype):
+              raise SystemExit('Forbidden All label remains in approved prototype source')
+          if 'Provider category 01' not in prototype:
+              raise SystemExit('Provider-driven fixture semantics were not materialized')
+
+          for path in (Path('OwnPlay_TV_SOURCE.md'), Path('OwnPlay_TV_UI_INTERACTION_CONTRACT.md')):
+              text = path.read_text(encoding='utf-8')
+              if 'Global navigation must not be placed across the top' not in text and path.name == 'OwnPlay_TV_SOURCE.md':
+                  raise SystemExit('Source authority lost approved top-navigation prohibition')
+              if path.name == 'OwnPlay_TV_UI_INTERACTION_CONTRACT.md' and 'must not render persistent destination text labels' not in text:
+                  raise SystemExit('UI contract lost icon-only rail rule')
+          PY
+
+          git config user.name 'OwnPlay TV Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Materialize approved OwnPlay TV UI reference'
+          git push origin HEAD:agent/approved-ui-reference-cleanup
