@@ -18,6 +18,13 @@ def replace_count(text: str, old: str, new: str, expected: int, label: str) -> s
     return text.replace(old, new)
 
 
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise RuntimeError(f'{label}: expected one match, found {count}')
+    return text.replace(old, new, 1)
+
+
 # Live browse hierarchy is intrinsically TV-only. Preserve the durable remote contract:
 # categories at root, Back from channels to categories, and repeated same-channel activation
 # promotes Preview to Full View.
@@ -276,4 +283,36 @@ for path in (ROOT / 'app/src/test').rglob('*.kt'):
 if legacy_test_paths:
     raise RuntimeError('Tests still reference the removed TV source set: ' + ', '.join(legacy_test_paths))
 
-print('TV-only Live hierarchy and migration contract cleanup staged successfully.')
+# Long-press drag is gone, but favorite/manual order remains a remote action distinction.
+# Keep that distinction explicit without restoring any pointer gesture state.
+browse_path = 'app/src/main/java/app/ownplay/player/ui/live/LiveBrowseScreen.kt'
+browse = read(browse_path)
+browse = replace_once(
+    browse,
+    '    val listState = rememberLazyListState()\n\n    Surface(\n',
+    '''    val listState = rememberLazyListState()\n    val favoriteOrderActions = editState.isEditing &&\n        state.query.favoritesOnly &&\n        state.query.order == LiveBrowseOrder.FAVORITE_ORDER\n\n    Surface(\n''',
+    'LiveBrowse remote favorite order context',
+)
+browse = replace_once(
+    browse,
+    '''                    BulkEditBar(\n                        selectedCount = editState.selectedChannelIds.size,\n                        selectedVisibleChannel = selectedVisibleChannel,\n                        groups = state.customGroups,\n''',
+    '''                    BulkEditBar(\n                        selectedCount = editState.selectedChannelIds.size,\n                        selectedVisibleChannel = selectedVisibleChannel,\n                        groups = state.customGroups,\n                        favoriteOrderActions = favoriteOrderActions,\n''',
+    'LiveBrowse remote order argument',
+)
+browse = replace_once(
+    browse,
+    '''private fun BulkEditBar(\n    selectedCount: Int,\n    selectedVisibleChannel: LiveChannelItem?,\n    groups: List<LiveCustomGroup>,\n''',
+    '''private fun BulkEditBar(\n    selectedCount: Int,\n    selectedVisibleChannel: LiveChannelItem?,\n    groups: List<LiveCustomGroup>,\n    favoriteOrderActions: Boolean,\n''',
+    'BulkEditBar remote order API',
+)
+if browse.count('favoriteDragEnabled') != 4:
+    raise RuntimeError(
+        f'LiveBrowse remote favorite action references: expected four matches, found {browse.count("favoriteDragEnabled")}',
+    )
+browse = browse.replace('favoriteDragEnabled', 'favoriteOrderActions')
+for forbidden in ('detectDragGesturesAfterLongPress', 'pointerInput', 'draggedPointerY', 'dragAutoScrollStep', 'Hold a channel, then drag'):
+    if forbidden in browse:
+        raise RuntimeError(f'LiveBrowse touch drag residue after remote order fix: {forbidden}')
+write(browse_path, browse)
+
+print('TV-only Live hierarchy, migration contracts, and remote order cleanup staged successfully.')
