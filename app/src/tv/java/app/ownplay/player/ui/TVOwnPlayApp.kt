@@ -277,7 +277,7 @@ private fun TVOwnPlayAppContent(
         val resolvedSourceId = resolveActivePlaylistId(
             persistedSourceId = persistedSelection.sourceId,
             currentSourceId = activeSourceId,
-            availableSourceIds = availableSourceIds,
+            enabledSourceIds = availableSourceIds,
         )
         activeSourceId = resolvedSourceId
 
