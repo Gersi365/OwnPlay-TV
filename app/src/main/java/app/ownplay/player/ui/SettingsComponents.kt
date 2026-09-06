@@ -171,11 +171,12 @@ internal fun SettingsActionRow(
     detail: String,
     actionLabel: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var focused by remember(title) { mutableStateOf(false) }
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(64.dp)
             .onFocusChanged { focused = it.isFocused }
