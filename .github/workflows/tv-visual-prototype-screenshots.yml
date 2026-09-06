@@ -6,6 +6,7 @@ on:
       - 'agent/tv-restructure-visual-prototype'
     paths:
       - 'app/src/tvDebug/**'
+      - 'tools/apply_tv_visual_left_rail_provider_categories.py'
       - 'tools/capture_tv_visual_prototype.sh'
       - '.github/workflows/tv-visual-prototype-screenshots.yml'
 
@@ -46,6 +47,15 @@ jobs:
             sudo udevadm trigger --name-match=kvm
             ls -l /dev/kvm
           fi
+
+      - name: Apply approved visual prototype decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/apply_tv_visual_left_rail_provider_categories.py
+          grep -q 'private fun PrimaryRail' app/src/tvDebug/java/app/ownplay/player/prototype/TvVisualPrototypeScreens.kt
+          ! grep -q 'Nav("Live"' app/src/tvDebug/java/app/ownplay/player/prototype/TvVisualPrototypeScreens.kt
+          ! grep -Eq '\bAll\b' app/src/tvDebug/java/app/ownplay/player/prototype/TvVisualPrototypeScreens.kt
 
       - name: Build authorized emulator QA APK
         shell: bash
