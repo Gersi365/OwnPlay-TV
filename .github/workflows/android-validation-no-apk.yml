@@ -1,6 +1,6 @@
 name: OwnPlay TV Validation No APK
 
-# Source/schema validation for OwnPlay TV. Never assemble, package, sign, or upload APKs.
+# Source/schema validation for the single OwnPlay TV target. Never assemble, package, sign, or upload APKs.
 on:
   workflow_dispatch:
   pull_request:
@@ -24,16 +24,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Verify TV-only source boundary
+      - name: Verify single TV source boundary
         shell: bash
         run: |
           set -euo pipefail
-          test -d app/src/tv
           test -d app/src/main
+          test ! -d app/src/tv
           test ! -d app/src/mobile
           test ! -d app/src/testMobile
           grep -Fq 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
-          test -f app/src/tv/java/app/ownplay/player/ui/TvSettingsScreen.kt
+          test -f app/src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt
+          test -f app/src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt
+          if grep -RInE 'create\("mobile"\)|app\.ownplay\.mobile|IS_TV_BUILD|TARGET_DEVICE|AppDeviceProfile|AppOrientation|SMARTPHONE|TOUCHSCREEN|PORTRAIT|PortraitLive|SettingsLandscape|PictureInPicture|rotationFullscreen|GestureDetector|dispatchTouchEvent' app/src app/build.gradle.kts; then
+            echo 'Forbidden mobile/form-factor residue remains.' >&2
+            exit 2
+          fi
+          if grep -RInE 'Configuration\.ORIENTATION_(LANDSCAPE|PORTRAIT)|isLandscape|isPortrait|UI_MODE_TYPE_TELEVISION|isTelevision|MobileFullscreen|MOBILE_' app/src; then
+            echo 'Forbidden runtime form-factor residue remains.' >&2
+            exit 3
+          fi
+          if grep -RInE 'detectTapGestures|detectDragGesturesAfterLongPress|pointerInput' app/src/main/java/app/ownplay/player/ui; then
+            echo 'Forbidden touch-only UI interaction residue remains.' >&2
+            exit 4
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -55,10 +68,10 @@ jobs:
       - name: Validate TV without APK
         run: >-
           gradle
-          :app:kspTvDebugKotlin
-          :app:testTvDebugUnitTest
-          :app:lintTvDebug
-          :app:compileTvDebugAndroidTestKotlin
+          :app:kspDebugKotlin
+          :app:testDebugUnitTest
+          :app:lintDebug
+          :app:compileDebugAndroidTestKotlin
           --stacktrace
 
       - name: Verify no APK was produced
@@ -120,7 +133,7 @@ jobs:
 
           if problems:
               print('\n'.join(problems))
-              sys.exit(2)
+              sys.exit(5)
           PY
 
       - name: Upload Room schema evidence only

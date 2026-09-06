@@ -72,11 +72,11 @@ jobs:
           PY
           python3 tools/apply_tv_only_shared_cleanup.py
 
-          rm tools/apply_tv_only_form_factor_cleanup.py
-          rm tools/apply_tv_only_shared_cleanup.py
-          rm .github/workflows/apply-tv-only-form-factor-cleanup.yml
-          rm .github/workflows/apply-tv-only-shared-cleanup.yml
-          rm .github/workflows/audit-tv-only-form-factor.yml
+          rm -f tools/apply_tv_only_form_factor_cleanup.py
+          rm -f tools/apply_tv_only_shared_cleanup.py
+          rm -f .github/workflows/apply-tv-only-form-factor-cleanup.yml
+          rm -f .github/workflows/apply-tv-only-shared-cleanup.yml
+          rm -f .github/workflows/audit-tv-only-form-factor.yml
 
           git diff --check
           test ! -d app/src/tv
