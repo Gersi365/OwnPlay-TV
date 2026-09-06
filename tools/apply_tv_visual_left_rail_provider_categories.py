@@ -142,9 +142,6 @@ replacements = {
     'Category("Kids", false)': 'Category("Provider category 05", false)',
     'RowItem("Categories", "Visibility and order", focused = true)': 'RowItem("Provider categories", "Visibility and local order", focused = true)',
     'Section("Category order")': 'Section("Provider category order")',
-    'Spacer(Modifier.height(8.dp)); RowItem("Sports", "24 channels", focused = true)': 'Spacer(Modifier.height(8.dp)); RowItem("Provider category 02", "24 channels", focused = true)',
-    'Spacer(Modifier.height(8.dp)); RowItem("Entertainment", "31 channels")': 'Spacer(Modifier.height(8.dp)); RowItem("Provider category 03", "31 channels")',
-    'Spacer(Modifier.height(8.dp)); RowItem("Kids", "12 channels")': 'Spacer(Modifier.height(8.dp)); RowItem("Provider category 04", "12 channels")',
     'Pill("Landscape")': 'Pill("TV-only")',
 }
 
@@ -153,18 +150,22 @@ for old, new in replacements.items():
         raise SystemExit(f"Required prototype anchor not found: {old}")
     text = text.replace(old, new)
 
-# The first provider category order row has the same News anchor as Live browsing and was
-# already transformed to Provider category 02 above. Normalize the management sequence.
-management_anchor = '''Section("Provider category order")\n                Spacer(Modifier.height(12.dp))\n                RowItem("Provider category 02", "18 channels")'''
-if management_anchor not in text:
-    raise SystemExit("Provider category management anchor not found")
-text = text.replace(
-    management_anchor,
-    '''Section("Provider category order")\n                Spacer(Modifier.height(12.dp))\n                RowItem("Provider category 01", "18 channels")''',
-    1,
-)
+management_before = '''Section("Provider category order")
+                Spacer(Modifier.height(12.dp))
+                RowItem("Provider category 02", "18 channels")
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 03", "24 channels", focused = true)
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 04", "31 channels")
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 05", "12 channels")'''
+management_after = '''Section("Provider category order")
+                Spacer(Modifier.height(12.dp))
+                RowItem("Provider category 01", "18 channels")
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 02", "24 channels", focused = true)
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 03", "31 channels")
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 04", "12 channels")'''
+if management_before not in text:
+    raise SystemExit("Provider category management block not found")
+text = text.replace(management_before, management_after, 1)
 
-# Keep local personalization distinct from provider taxonomy.
 text = text.replace(
     'RowItem("Custom groups", "Create and organize groups")',
     'RowItem("Custom groups", "Local personalization only")',
@@ -174,7 +175,6 @@ text = text.replace(
     'Text("Provider categories can be hidden or reordered locally; OwnPlay does not invent replacement content categories. Row geometry never changes with focus.",',
 )
 
-# Screenshot prototype guards for the latest durable UI decisions.
 for forbidden in ('TopBar(', 'Nav("Live"', 'Nav("Movies"', 'Nav("Series"', 'Nav("Settings"', 'Pill("Landscape")'):
     if forbidden in text:
         raise SystemExit(f"Forbidden legacy prototype token remains: {forbidden}")
