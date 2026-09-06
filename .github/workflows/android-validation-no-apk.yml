@@ -6,7 +6,7 @@ on:
   pull_request:
   push:
     branches:
-      - agent/tv-settings-tv-first-no-apk
+      - 'agent/**-no-apk'
 
 permissions:
   contents: read
