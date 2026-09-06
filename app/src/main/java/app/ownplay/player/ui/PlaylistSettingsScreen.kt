@@ -530,7 +530,7 @@ private fun PlaylistRemoteActionRow(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    var focused by remember(title, enabled) { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
     val highlighted = focused && enabled
 
     Surface(

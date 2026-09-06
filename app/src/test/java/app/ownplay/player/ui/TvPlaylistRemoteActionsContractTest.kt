@@ -32,6 +32,8 @@ class TvPlaylistRemoteActionsContractTest {
         assertTrue(playlistSource.contains("private fun PlaylistRemoteActionRow("))
         assertTrue(playlistSource.contains(".height(60.dp)"))
         assertTrue(playlistSource.contains(".onFocusChanged { focused = it.isFocused }"))
+        assertTrue(playlistSource.contains("var focused by remember { mutableStateOf(false) }"))
+        assertFalse(playlistSource.contains("remember(title, enabled)"))
         assertTrue(playlistSource.contains(".clickable(enabled = enabled, onClick = onClick)"))
         assertTrue(playlistSource.contains("title = \"Open in Live\""))
         assertTrue(playlistSource.contains("title = \"Edit source\""))
