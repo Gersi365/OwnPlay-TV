@@ -75,7 +75,7 @@ Prefer changes in:
 
 Do not refactor unrelated modules merely for consistency.
 
-Do not modify inactive legacy code solely because it contains outdated visual patterns.
+Once an approved TV presentation replaces an older presentation or reference path, remove the superseded presentation/reference scaffolding rather than preserving it only because it is inactive. Active behavior must be migrated and validated before its previous execution path is deleted. Preserve domain, provider, playback, persistence, and migration logic unless the approved TV behavior genuinely requires a change.
 
 ---
 

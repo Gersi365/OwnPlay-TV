@@ -119,7 +119,7 @@ OwnPlay TV does not expose product UI for:
 
 - Downloads management;
 - Offline media management;
-- Offline filtering in Library;
+- Offline filtering in Movies or Series;
 - Picture-in-Picture.
 
 Shared backend code may remain where removing it would create unrelated architectural churn, but these are not OwnPlay TV product surfaces.
@@ -287,7 +287,7 @@ Typical hierarchy:
 - fullscreen Live → Preview;
 - Preview → channel browsing;
 - nested Live hierarchy → previous hierarchy level;
-- nested Library screen → previous Library level;
+- nested Movies or Series screen → previous level;
 - nested Settings screen → Settings root;
 - app exit confirmation only at the actual root where defined.
 
@@ -295,7 +295,7 @@ Do not show exit confirmation while a deeper layer still owns Back.
 
 ---
 
-# 13. Library & On-Demand Playback
+# 13. Movies, Series & On-Demand Playback
 
 Movies and Series should remain easy to browse with a remote and readable from TV viewing distance.
 

@@ -99,68 +99,77 @@ private fun Shell(
     subtitle: String? = null,
     content: @Composable () -> Unit,
 ) {
+    Row(Modifier.fillMaxSize().background(Bg)) {
+        PrimaryRail(destination)
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(start = 34.dp, end = 46.dp, top = 28.dp, bottom = 30.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = TextMain, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    if (subtitle != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(subtitle, color = Muted, fontSize = 13.sp)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("20:17", color = TextMain, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    Text("OwnPlay TV", color = Muted, fontSize = 10.sp)
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            Box(Modifier.weight(1f)) { content() }
+        }
+    }
+}
+
+@Composable
+private fun PrimaryRail(destination: String) {
     Column(
         Modifier
-            .fillMaxSize()
-            .background(Bg)
-            .padding(horizontal = 54.dp, vertical = 30.dp),
+            .width(82.dp)
+            .fillMaxHeight()
+            .background(Color(0xFF0C0F15))
+            .border(1.dp, Color(0xFF181C25), RoundedCornerShape(0.dp))
+            .padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        TopBar(destination)
-        Spacer(Modifier.height(28.dp))
-        Text(title, color = TextMain, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        if (subtitle != null) {
-            Spacer(Modifier.height(4.dp))
-            Text(subtitle, color = Muted, fontSize = 14.sp)
+        Box(
+            Modifier.size(46.dp).background(Primary, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = "OwnPlay", tint = Color.White, modifier = Modifier.size(30.dp))
         }
-        Spacer(Modifier.height(20.dp))
-        Box(Modifier.weight(1f)) { content() }
+        Spacer(Modifier.weight(1f))
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            RailIcon(Icons.Default.LiveTv, "Live", destination == "Live")
+            RailIcon(Icons.Default.Movie, "Movies", destination == "Movies")
+            RailIcon(Icons.Default.VideoLibrary, "Series", destination == "Series")
+            RailIcon(Icons.Default.Settings, "Settings", destination == "Settings")
+        }
+        Spacer(Modifier.weight(1f))
+        Text("TV", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
     }
 }
 
 @Composable
-private fun TopBar(destination: String) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(38.dp).background(Primary, RoundedCornerShape(9.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(27.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("OwnPlay", color = TextMain, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                Text("TV", color = Muted, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.4.sp)
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Nav("Live", Icons.Default.LiveTv, destination == "Live")
-            Nav("Movies", Icons.Default.Movie, destination == "Movies")
-            Nav("Series", Icons.Default.VideoLibrary, destination == "Series")
-            Nav("Settings", Icons.Default.Settings, destination == "Settings")
-        }
-        Spacer(Modifier.weight(1f))
-        Column(horizontalAlignment = Alignment.End) {
-            Text("20:17", color = TextMain, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-            Text("TV prototype", color = Muted, fontSize = 11.sp)
-        }
-    }
-}
-
-@Composable
-private fun Nav(label: String, icon: ImageVector, selected: Boolean) {
-    Row(
+private fun RailIcon(icon: ImageVector, description: String, selected: Boolean) {
+    Box(
         Modifier
-            .height(42.dp)
-            .border(2.dp, if (selected) Primary else Outline, RoundedCornerShape(10.dp))
-            .background(if (selected) PrimarySoft else Surface, RoundedCornerShape(10.dp))
-            .padding(horizontal = 15.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .size(52.dp)
+            .border(2.dp, if (selected) Primary else Outline, RoundedCornerShape(12.dp))
+            .background(if (selected) PrimarySoft else Surface, RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (selected) Primary else Muted, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label, color = if (selected) TextMain else Muted, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (selected) Primary else Muted,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
@@ -306,27 +315,27 @@ private fun Category(label: String, focused: Boolean) {
 
 @Composable
 private fun LiveCategories() {
-    Shell("Live", "Live", "Choose a category. OK opens its channel list.") {
+    Shell("Live", "Live", "Categories shown here come from the active provider.") {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             Column(Modifier.width(420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Section("Categories")
+                Section("Provider categories")
                 Spacer(Modifier.height(4.dp))
-                RowItem("Favorites", "9 channels", leading = Icons.Default.Favorite)
-                RowItem("News", "18 channels")
-                RowItem("Sports", "24 channels", focused = true)
-                RowItem("Entertainment", "31 channels")
-                RowItem("Kids", "12 channels")
-                RowItem("Documentary", "14 channels")
+                RowItem("Provider category 01", "9 channels")
+                RowItem("Provider category 02", "18 channels")
+                RowItem("Provider category 03", "24 channels", focused = true)
+                RowItem("Provider category 04", "31 channels")
+                RowItem("Provider category 05", "12 channels")
+                RowItem("Provider category 06", "14 channels")
             }
             Column(Modifier.weight(1f)) {
-                Section("Sports")
+                Section("Provider category 03")
                 Spacer(Modifier.height(12.dp))
                 Panel(Modifier.fillMaxWidth(), "24 channels", "A simple category entry point. Focus stays in the left list; OK moves one logical level deeper into channels.")
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MiniChannel("Arena 1", "Football", true)
-                    MiniChannel("Arena 2", "Basketball", false)
-                    MiniChannel("Sport Max", "Tennis", false)
+                    MiniChannel("Channel 301", "Current program", true)
+                    MiniChannel("Channel 302", "Current program", false)
+                    MiniChannel("Channel 303", "Current program", false)
                 }
                 Spacer(Modifier.height(18.dp))
                 Panel(Modifier.fillMaxWidth(), "Remote", "Up / Down changes category · OK opens channels · Back returns to the previous product area")
@@ -355,24 +364,24 @@ private fun MiniChannel(name: String, program: String, focused: Boolean) {
 
 @Composable
 private fun LiveChannelsPreview() {
-    Shell("Live", "Sports", "Browse channels while Preview remains passive.") {
+    Shell("Live", "Provider category 03", "Browse channels while Preview remains passive.") {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.width(500.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Section("Channels")
                 Spacer(Modifier.height(4.dp))
-                RowItem("Arena Sport 1 HD", "19:30  Matchday Live", trailing = "LIVE")
-                RowItem("Arena Sport 2 HD", "20:00  European Football", focused = true, trailing = "PREVIEW")
-                RowItem("Sport Max", "20:15  Courtside")
-                RowItem("National Sport", "20:30  Sports Desk")
-                RowItem("Racing TV", "20:00  Night Race")
-                RowItem("Fight Network", "19:45  Main Event")
+                RowItem("Channel 301 HD", "19:30  Current program", trailing = "LIVE")
+                RowItem("Channel 302 HD", "20:00  Current program", focused = true, trailing = "PREVIEW")
+                RowItem("Channel 303", "20:15  Current program")
+                RowItem("Channel 304", "20:30  Current program")
+                RowItem("Channel 305", "20:00  Current program")
+                RowItem("Channel 306", "19:45  Current program")
             }
             Column(Modifier.weight(1f)) {
-                VideoFrame(Modifier.fillMaxWidth().height(286.dp), "Arena Sport 2 HD", "Preview · no playback controls")
+                VideoFrame(Modifier.fillMaxWidth().height(286.dp), "Channel 302 HD", "Preview · no playback controls")
                 Spacer(Modifier.height(15.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("European Football", color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text("Current program", color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         Text("20:00 — 21:50", color = Muted, fontSize = 12.sp)
                     }
                     Pill("On now", positive = true)
@@ -380,7 +389,7 @@ private fun LiveChannelsPreview() {
                 Spacer(Modifier.height(9.dp))
                 Progress(0.36f)
                 Spacer(Modifier.height(12.dp))
-                Text("Next  ·  Post Match  21:50", color = Muted, fontSize = 13.sp)
+                Text("Next  ·  Next program  21:50", color = Muted, fontSize = 13.sp)
                 Spacer(Modifier.height(13.dp))
                 Text("OK again on the same previewed channel opens Full View.", color = Primary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
@@ -394,7 +403,7 @@ private fun LiveFull(showEpg: Boolean) {
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.LiveTv, null, tint = Color(0xFF33445A), modifier = Modifier.size(86.dp))
             Spacer(Modifier.height(12.dp))
-            Text("Arena Sport 2 HD", color = Color(0xFF7F8EA3), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("Channel 302 HD", color = Color(0xFF7F8EA3), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text("Full View video surface", color = Color(0xFF526075), fontSize = 12.sp)
         }
         if (showEpg) {
@@ -410,12 +419,12 @@ private fun LiveFull(showEpg: Boolean) {
                     .padding(20.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Arena Sport 2 HD", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Channel 302 HD", color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     Pill("LIVE", positive = true)
                 }
                 Spacer(Modifier.height(7.dp))
-                Text("European Football", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("Current program", color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text("20:00 — 21:50", color = Muted, fontSize = 12.sp)
             }
         }
@@ -432,7 +441,7 @@ private fun FullEpg(modifier: Modifier = Modifier) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column {
-                Text("Arena Sport 2 HD", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Channel 302 HD", color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("EPG timeline", color = Muted, fontSize = 11.sp)
             }
             Spacer(Modifier.weight(1f))
@@ -440,10 +449,10 @@ private fun FullEpg(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Timeline(Modifier.width(210.dp), "19:00", "Matchday", false)
-            Timeline(Modifier.width(370.dp), "20:00", "European Football", true)
-            Timeline(Modifier.width(260.dp), "21:50", "Post Match", false)
-            Timeline(Modifier.width(230.dp), "22:30", "Highlights", false)
+            Timeline(Modifier.width(210.dp), "19:00", "Previous program", false)
+            Timeline(Modifier.width(370.dp), "20:00", "Current program", true)
+            Timeline(Modifier.width(260.dp), "21:50", "Next program", false)
+            Timeline(Modifier.width(230.dp), "22:30", "Later program", false)
         }
     }
 }
@@ -465,7 +474,7 @@ private fun Timeline(modifier: Modifier, time: String, title: String, focused: B
 
 @Composable
 private fun Movies() {
-    Shell("Movies", "Movies", "Continue where you stopped, or browse by category.") {
+    Shell("Movies", "Movies", "Continue Watching stays here; categories come from the active provider.") {
         Column(Modifier.fillMaxSize()) {
             Section("Continue Watching")
             Spacer(Modifier.height(10.dp))
@@ -476,22 +485,22 @@ private fun Movies() {
             }
             Spacer(Modifier.height(22.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Section("Categories")
+                Section("Provider categories")
                 Spacer(Modifier.width(18.dp))
-                Category("Drama", true)
-                Spacer(Modifier.width(8.dp)); Category("Action", false)
-                Spacer(Modifier.width(8.dp)); Category("Comedy", false)
-                Spacer(Modifier.width(8.dp)); Category("Documentary", false)
-                Spacer(Modifier.width(8.dp)); Category("Family", false)
+                Category("Provider category 01", true)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 02", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 03", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 04", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 05", false)
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Poster("Northbound", "2026 · Drama")
-                Poster("Paper City", "2025 · Drama")
-                Poster("Horizon Line", "2026 · Drama")
-                Poster("Silent Lake", "2024 · Drama")
-                Poster("The Long Route", "2025 · Drama")
-                Poster("Winter Glass", "2026 · Drama")
+                Poster("Northbound", "2026 · provider metadata")
+                Poster("Paper City", "2025 · provider metadata")
+                Poster("Horizon Line", "2026 · provider metadata")
+                Poster("Silent Lake", "2024 · provider metadata")
+                Poster("The Long Route", "2025 · provider metadata")
+                Poster("Winter Glass", "2026 · provider metadata")
             }
         }
     }
@@ -506,7 +515,7 @@ private fun MovieDetails() {
                 Text("Northbound", color = TextMain, fontSize = 34.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Pill("2026"); Pill("1 h 52 min"); Pill("Drama"); Pill("16+")
+                    Pill("2026"); Pill("1 h 52 min"); Pill("Provider metadata"); Pill("16+")
                 }
                 Spacer(Modifier.height(22.dp))
                 Text(
@@ -580,7 +589,7 @@ private fun DemandPlayback(title: String, episode: String?) {
 
 @Composable
 private fun Series() {
-    Shell("Series", "Series", "Resume an episode or browse series by category.") {
+    Shell("Series", "Series", "Continue Watching stays here; categories come from the active provider.") {
         Column(Modifier.fillMaxSize()) {
             Section("Continue Watching")
             Spacer(Modifier.height(10.dp))
@@ -590,13 +599,13 @@ private fun Series() {
             }
             Spacer(Modifier.height(22.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Section("Categories")
+                Section("Provider categories")
                 Spacer(Modifier.width(18.dp))
-                Category("Drama", true)
-                Spacer(Modifier.width(8.dp)); Category("Crime", false)
-                Spacer(Modifier.width(8.dp)); Category("Sci-Fi", false)
-                Spacer(Modifier.width(8.dp)); Category("Comedy", false)
-                Spacer(Modifier.width(8.dp)); Category("Kids", false)
+                Category("Provider category 01", true)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 02", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 03", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 04", false)
+                Spacer(Modifier.width(8.dp)); Category("Provider category 05", false)
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -620,7 +629,7 @@ private fun SeriesDetails() {
                 Text("Arcline", color = TextMain, fontSize = 34.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Pill("2024–2026"); Pill("3 seasons"); Pill("Drama")
+                    Pill("2024–2026"); Pill("3 seasons"); Pill("Provider metadata")
                 }
                 Spacer(Modifier.height(22.dp))
                 Text(
@@ -758,22 +767,22 @@ private fun LiveManagement() {
             Column(Modifier.width(360.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Section("Manage")
                 Spacer(Modifier.height(4.dp))
-                RowItem("Categories", "Visibility and order", focused = true)
+                RowItem("Provider categories", "Visibility and local order", focused = true)
                 RowItem("Channels", "Visibility, names and logos")
                 RowItem("Favorites", "Membership and order")
-                RowItem("Custom groups", "Create and organize groups")
+                RowItem("Custom groups", "Local personalization only")
             }
             Column(Modifier.weight(1f)) {
-                Section("Category order")
+                Section("Provider category order")
                 Spacer(Modifier.height(12.dp))
-                RowItem("News", "18 channels")
-                Spacer(Modifier.height(8.dp)); RowItem("Sports", "24 channels", focused = true)
-                Spacer(Modifier.height(8.dp)); RowItem("Entertainment", "31 channels")
-                Spacer(Modifier.height(8.dp)); RowItem("Kids", "12 channels")
+                RowItem("Provider category 01", "18 channels")
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 02", "24 channels", focused = true)
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 03", "31 channels")
+                Spacer(Modifier.height(8.dp)); RowItem("Provider category 04", "12 channels")
                 Spacer(Modifier.height(17.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Action("Move up", focused = true); Action("Move down"); Action("Hide") }
                 Spacer(Modifier.height(14.dp))
-                Text("Explicit remote actions replace pointer drag. Row geometry never changes with focus.", color = Muted, fontSize = 12.sp)
+                Text("Provider categories can be hidden or reordered locally; OwnPlay does not invent replacement content categories. Row geometry never changes with focus.", color = Muted, fontSize = 12.sp)
             }
         }
     }
@@ -839,7 +848,7 @@ private fun About() {
                 Spacer(Modifier.height(14.dp))
                 Panel(Modifier.fillMaxWidth(), "Disclaimer", "OwnPlay does not sell subscriptions, provide channels, bundle provider content, or distribute provider media.")
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Pill("Android TV"); Pill("Remote-first"); Pill("Landscape") }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Pill("Android TV"); Pill("Remote-first"); Pill("TV-only") }
             }
         }
     }
