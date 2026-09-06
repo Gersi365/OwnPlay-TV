@@ -1,0 +1,139 @@
+name: Apply TV-only shared cleanup
+
+on:
+  push:
+    branches:
+      - agent/tv-only-form-factor-cleanup-no-apk
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/tv-only-form-factor-cleanup-no-apk
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Apply deterministic TV-only cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "s/if 'isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:/if 'val isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:/" tools/apply_tv_only_form_factor_cleanup.py
+          python3 tools/apply_tv_only_form_factor_cleanup.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow_path = Path('.github/workflows/apply-tv-only-form-factor-cleanup.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "          PY\n"
+          start = workflow.find(start_marker)
+          if start < 0:
+              raise RuntimeError('Existing cleanup inline Python start marker not found')
+          start += len(start_marker)
+          end = workflow.find(end_marker, start)
+          if end < 0:
+              raise RuntimeError('Existing cleanup inline Python end marker not found')
+          code = textwrap.dedent(workflow[start:end])
+          exec(compile(code, str(workflow_path), 'exec'), {})
+          PY
+          python3 tools/apply_tv_only_shared_cleanup.py
+
+          rm tools/apply_tv_only_form_factor_cleanup.py
+          rm tools/apply_tv_only_shared_cleanup.py
+          rm .github/workflows/apply-tv-only-form-factor-cleanup.yml
+          rm .github/workflows/apply-tv-only-shared-cleanup.yml
+          rm .github/workflows/audit-tv-only-form-factor.yml
+
+          git diff --check
+          test ! -d app/src/tv
+          test ! -d app/src/mobile
+          test ! -d app/src/testMobile
+          grep -Fq 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
+          test -f app/src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt
+          test -f app/src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveViewModes.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveWorkspaceAdaptive.kt
+
+          if grep -RInE 'create\("mobile"\)|app\.ownplay\.mobile|IS_TV_BUILD|TARGET_DEVICE|AppDeviceProfile|AppOrientation|SMARTPHONE|TOUCHSCREEN|PORTRAIT|PortraitLive|SettingsLandscape|PictureInPicture|rotationFullscreen|GestureDetector|dispatchTouchEvent' app/src app/build.gradle.kts; then
+            echo 'Forbidden mobile/form-factor residue remains.' >&2
+            exit 2
+          fi
+          if grep -RInE 'Configuration\.ORIENTATION_(LANDSCAPE|PORTRAIT)|isLandscape|isPortrait|UI_MODE_TYPE_TELEVISION|isTelevision|MobileFullscreen|MOBILE_' app/src; then
+            echo 'Forbidden runtime form-factor residue remains.' >&2
+            exit 3
+          fi
+          if grep -RInE 'detectTapGestures|detectDragGesturesAfterLongPress|pointerInput' app/src/main/java/app/ownplay/player/ui; then
+            echo 'Forbidden touch-only UI interaction residue remains.' >&2
+            exit 4
+          fi
+
+      - name: Validate single TV variant without APK
+        run: >-
+          gradle
+          :app:kspDebugKotlin
+          :app:testDebugUnitTest
+          :app:lintDebug
+          :app:compileDebugAndroidTestKotlin
+          --stacktrace
+
+      - name: Verify no APK and Room schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(find app/build -type f -name '*.apk' -print 2>/dev/null | wc -l)"
+          echo "APK artifacts: ${count}"
+          test "${count}" -eq 0
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          import sys
+
+          root = pathlib.Path('app/schemas')
+          problems = []
+          generated = sorted(root.rglob('*.json'))
+          if not generated:
+              problems.append('No Room schema JSON generated.')
+          for path in generated:
+              relative = path.as_posix()
+              try:
+                  committed = subprocess.check_output(
+                      ['git', 'show', f'HEAD:{relative}'],
+                      text=True,
+                      stderr=subprocess.DEVNULL,
+                  )
+              except subprocess.CalledProcessError:
+                  problems.append(f'Uncommitted Room schema: {relative}')
+                  continue
+              if json.loads(path.read_text(encoding='utf-8')) != json.loads(committed):
+                  problems.append(f'Room schema drift: {relative}')
+          if problems:
+              print('\n'.join(problems))
+              sys.exit(5)
+          PY
+
+      - name: Commit TV-only cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Make OwnPlay project TV-only'
+          git push origin HEAD:agent/tv-only-form-factor-cleanup-no-apk
