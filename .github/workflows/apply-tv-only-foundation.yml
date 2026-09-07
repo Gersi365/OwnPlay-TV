@@ -1,0 +1,249 @@
+name: Apply OwnPlay TV-only foundation
+
+on:
+  push:
+    branches:
+      - agent/tv-only-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Add TV-only foundation migration runner'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout foundation branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/tv-only-foundation
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.5.0"
+          cache-read-only: true
+
+      - name: Apply deterministic TV-only foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin \
+            agent/tv-only-form-factor-cleanup-no-apk:refs/remotes/origin/legacy-tv-cleanup
+          mkdir -p /tmp/ownplay-tv-foundation
+          git show origin/legacy-tv-cleanup:tools/apply_tv_only_form_factor_cleanup.py > /tmp/ownplay-tv-foundation/form.py
+          git show origin/legacy-tv-cleanup:tools/tv_only_form_factor_cleanup_inline.yml > /tmp/ownplay-tv-foundation/inline.yml
+          git show origin/legacy-tv-cleanup:tools/apply_tv_only_shared_cleanup.py > /tmp/ownplay-tv-foundation/shared.py
+          git show origin/legacy-tv-cleanup:tools/apply_tv_only_live_policy_cleanup.py > /tmp/ownplay-tv-foundation/live.py
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('/tmp/ownplay-tv-foundation/form.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              "if 'isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:",
+              "if 'val isTelevision' in live or 'isLandscape' in live or 'Portrait' in live:",
+          )
+          marker = '# Durable contract: one TV target, no mobile flavor/profile, no runtime orientation mode.'
+          index = text.find(marker)
+          if index < 0:
+              raise RuntimeError('Historical form-factor script durable-contract marker not found')
+          path.write_text(text[:index] + "print('TV-only form-factor source cleanup staged successfully.')\n", encoding='utf-8')
+          PY
+
+          python3 /tmp/ownplay-tv-foundation/form.py
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow_path = Path('/tmp/ownplay-tv-foundation/inline.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "          PY\n"
+          start = workflow.find(start_marker)
+          if start < 0:
+              raise RuntimeError('Historical inline cleanup Python start marker not found')
+          start += len(start_marker)
+          end = workflow.find(end_marker, start)
+          if end < 0:
+              raise RuntimeError('Historical inline cleanup Python end marker not found')
+          code = textwrap.dedent(workflow[start:end])
+          exec(compile(code, str(workflow_path), 'exec'), {})
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          helper_path = Path('/tmp/ownplay-tv-foundation/shared.py')
+          helper = helper_path.read_text(encoding='utf-8')
+          library_old = """text = remove_once(\n    text,\n    '''    val configuration = LocalConfiguration.current\\n    val isTelevision =\\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\\n''',\n    'Library root TV probe',\n)\n"""
+          library_new = """library_probe = '''    val configuration = LocalConfiguration.current\\n    val isTelevision =\\n        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION\\n'''\nif text.count(library_probe) != 2:\n    raise RuntimeError(f'Library TV probes: expected two matches, found {text.count(library_probe)}')\ntext = text.replace(library_probe, '', 1)\n"""
+          if helper.count(library_old) != 1:
+              raise RuntimeError(f'Shared cleanup helper library patch expected one match, found {helper.count(library_old)}')
+          helper = helper.replace(library_old, library_new, 1)
+
+          context_old = "text = remove_once(text, '    val context = LocalContext.current\\n', 'Live fullscreen local context')\n"
+          context_new = """context_line = '    val context = LocalContext.current\\n'\nif text.count(context_line) != 2:\n    raise RuntimeError(f'Live fullscreen context lines: expected two matches, found {text.count(context_line)}')\ntext = text.replace(context_line, '', 1)\n"""
+          if helper.count(context_old) != 1:
+              raise RuntimeError(f'Shared cleanup helper context patch expected one match, found {helper.count(context_old)}')
+          helper = helper.replace(context_old, context_new, 1)
+          helper_path.write_text(helper, encoding='utf-8')
+          PY
+
+          python3 /tmp/ownplay-tv-foundation/shared.py
+          python3 /tmp/ownplay-tv-foundation/live.py
+
+          # Preserve the approved visual reference under the real single Debug source set.
+          if [ -d app/src/tvDebug ]; then
+            mkdir -p app/src/debug
+            cp -a app/src/tvDebug/. app/src/debug/
+            rm -rf app/src/tvDebug
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('OwnPlay_TV_SOURCE.md')
+          source = source_path.read_text(encoding='utf-8')
+          if '## TV-Only Build & Form-Factor Invariant' not in source:
+              marker = '''Target devices:\n\n- Android TV;\n- Google TV;\n- compatible Android TV boxes.\n'''
+              addition = marker + '''\n## TV-Only Build & Form-Factor Invariant\n\n`OwnPlay-TV` is a single-target TV project. It must not contain a mobile application flavor, mobile package identity, smartphone runtime profile, touch-first fallback shell, or a separate mobile source set.\n\nThe application has no user-selectable or runtime portrait/landscape mode. The TV activity is statically fixed to landscape in the manifest because that is a device invariant, not a presentation choice. Product UI must not branch between portrait and landscape layouts.\n'''
+              if source.count(marker) != 1:
+                  raise RuntimeError('SOURCE target-device anchor not unique')
+              source = source.replace(marker, addition, 1)
+          source_path.write_text(source, encoding='utf-8')
+
+          ui_path = Path('OwnPlay_TV_UI_INTERACTION_CONTRACT.md')
+          ui = ui_path.read_text(encoding='utf-8')
+          if '## TV-Only Form-Factor Invariant' not in ui:
+              marker = '''Update this file only when intended TV interaction changes, not when implementation checkpoints change.\n'''
+              addition = marker + '''\n## TV-Only Form-Factor Invariant\n\nOwnPlay TV has one remote-first TV presentation. There is no phone/touch fallback presentation and no runtime orientation mode. The activity is fixed to landscape as a TV device invariant; interaction and layout logic must not branch between portrait and landscape variants.\n'''
+              if ui.count(marker) != 1:
+                  raise RuntimeError('UI contract document-role anchor not unique')
+              ui = ui.replace(marker, addition, 1)
+          ui_path.write_text(ui, encoding='utf-8')
+
+          workflow_path = Path('OwnPlay_TV_ENGINEERING_WORKFLOW.md')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          invariant = 'This repository is TV-only. Do not preserve mobile flavors, mobile source sets, smartphone profiles, touch-first fallback shells, PiP/mobile window policy, or portrait/landscape presentation branches as inactive legacy.'
+          if invariant not in workflow:
+              marker = 'Do not refactor unrelated modules merely for consistency.\n'
+              addition = marker + '\n' + invariant + ' Remove such form-factor legacy when it is found, while respecting separate safety boundaries such as destructive database migrations.\n'
+              if workflow.count(marker) != 1:
+                  raise RuntimeError('Engineering scope anchor not unique')
+              workflow = workflow.replace(marker, addition, 1)
+          workflow_path.write_text(workflow, encoding='utf-8')
+          PY
+
+          # Normalize whitespace in files touched by the historical deterministic helpers.
+          python3 - <<'PY'
+          from pathlib import Path
+          for relative in (
+              'app/src/main/java/app/ownplay/player/ui/EpgGuideSheet.kt',
+              'app/src/main/java/app/ownplay/player/ui/library/LibraryContinueWatching.kt',
+              'app/src/main/java/app/ownplay/player/ui/library/UnifiedLibraryRoute.kt',
+          ):
+              path = Path(relative)
+              text = path.read_text(encoding='utf-8')
+              path.write_text('\n'.join(line.rstrip(' \t') for line in text.split('\n')), encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/apply-tv-only-foundation.yml
+
+          git diff --check
+          test ! -d app/src/tv
+          test ! -d app/src/tvDebug
+          test ! -d app/src/mobile
+          test ! -d app/src/testMobile
+          test -d app/src/main
+          test -d app/src/debug
+          grep -Fq 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
+          grep -Fq 'android:screenOrientation="landscape"' app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt
+          test -f app/src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveViewModes.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveWorkspaceAdaptive.kt
+          test -f app/src/debug/java/app/ownplay/player/prototype/TvVisualPrototypeScreens.kt
+
+          if grep -RInE 'create\("mobile"\)|app\.ownplay\.mobile|IS_TV_BUILD|TARGET_DEVICE|AppDeviceProfile|AppOrientation|SMARTPHONE|TOUCHSCREEN|PORTRAIT|PortraitLive|SettingsLandscape|PictureInPicture|rotationFullscreen|GestureDetector|dispatchTouchEvent' app/src app/build.gradle.kts; then
+            echo 'Forbidden mobile/form-factor residue remains.' >&2
+            exit 2
+          fi
+          if grep -RInE 'Configuration\.ORIENTATION_(LANDSCAPE|PORTRAIT)|isLandscape|isPortrait|UI_MODE_TYPE_TELEVISION|isTelevision|MobileFullscreen|MOBILE_' app/src; then
+            echo 'Forbidden runtime form-factor residue remains.' >&2
+            exit 3
+          fi
+          if grep -RInE 'detectTapGestures|detectDragGesturesAfterLongPress|pointerInput' app/src/main/java/app/ownplay/player/ui; then
+            echo 'Forbidden touch-only UI interaction residue remains.' >&2
+            exit 4
+          fi
+          if grep -RInE '"All"' app/src/main/java/app/ownplay/player/ui app/src/debug/java/app/ownplay/player/prototype; then
+            echo 'Forbidden visible All label remains in TV UI source.' >&2
+            exit 5
+          fi
+
+      - name: Commit final foundation source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OwnPlay TV Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Make OwnPlay foundation TV-only'
+          git push origin HEAD:agent/tv-only-foundation
+          echo "FINAL_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Validate exact final HEAD without APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+          gradle \
+            :app:kspDebugKotlin \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:compileDebugAndroidTestKotlin \
+            --stacktrace
+
+      - name: Verify zero APK and Room stability
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(find app/build -type f -name '*.apk' -print 2>/dev/null | tee /tmp/ownplay-tv-apks.txt | wc -l)"
+          echo "APK artifacts: ${count}"
+          test "$count" -eq 0
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          import sys
+
+          root = pathlib.Path('app/schemas')
+          problems = []
+          generated = sorted(root.rglob('*.json'))
+          if not generated:
+              problems.append('No Room schema JSON found.')
+          for path in generated:
+              relative = path.as_posix()
+              committed = subprocess.check_output(['git', 'show', f'HEAD:{relative}'], text=True)
+              if json.loads(path.read_text(encoding='utf-8')) != json.loads(committed):
+                  problems.append(f'Room schema drift: {relative}')
+          if problems:
+              print('\n'.join(problems))
+              sys.exit(6)
+          print(f'Validated {len(generated)} committed Room schema files.')
+          PY
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+          echo "Validated final HEAD: $FINAL_HEAD"
