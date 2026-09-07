@@ -2,22 +2,28 @@ package app.ownplay.player.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,10 +38,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.OwnPlayAppRuntime
 import app.ownplay.player.livePlaybackPresentationSession
@@ -50,14 +63,12 @@ import app.ownplay.player.source.SourceSyncState
 import app.ownplay.player.source.selection.ActivePlaylistSelection
 import app.ownplay.player.source.selection.ActivePlaylistStore
 import app.ownplay.player.source.selection.resolveActivePlaylistId
-import app.ownplay.player.ui.library.UnifiedLibraryRoute
 import app.ownplay.player.ui.series.SeriesRoute
 import app.ownplay.player.ui.vod.VodRoute
 import kotlinx.coroutines.launch
 
 private enum class TVSection {
     LIVE,
-    LIBRARY,
     MOVIES,
     SERIES,
     SETTINGS,
@@ -66,9 +77,9 @@ private enum class TVSection {
 /**
  * TV-only OwnPlay presentation shell.
  *
- * Primary navigation exposes Live / Library / Settings only. Movies and Series are internal
- * Library routes. The TV configuration boundary makes D-pad/TV presentation deterministic and
- * prevents shared presentation components from exposing Mobile-only Offline/Download UI.
+ * Primary navigation exposes Live / Movies / Series / Settings as a fixed icon-only rail.
+ * The shell keeps global navigation geometry stable while page-specific routes retain ownership of
+ * their own nested Back/focus restoration behavior.
  */
 @Composable
 internal fun TVOwnPlayApp(
@@ -120,19 +131,6 @@ internal fun TVOwnPlayApp(
             },
         )
     }
-    var movieDetailReturnToLibrary by remember {
-        mutableStateOf(
-            onDemandPresentation.kind == OnDemandContentKind.MOVIE &&
-                onDemandPresentation.returnToLibraryOnDetailBack,
-        )
-    }
-    var seriesDetailReturnToLibrary by remember {
-        mutableStateOf(
-            onDemandPresentation.kind == OnDemandContentKind.SERIES &&
-                onDemandPresentation.returnToLibraryOnDetailBack,
-        )
-    }
-    var libraryFullscreen by remember { mutableStateOf(false) }
     val vodFullscreen = onDemandPresentation.isMoviePlayback
     val seriesFullscreen = onDemandPresentation.isSeriesPlayback
     val activeSelection = livePresentation.selection
@@ -212,18 +210,15 @@ internal fun TVOwnPlayApp(
 
         if (target != TVSection.MOVIES) {
             requestedVodMovieId = null
-            movieDetailReturnToLibrary = false
         }
         if (target != TVSection.SERIES) {
             requestedSeriesId = null
-            seriesDetailReturnToLibrary = false
         }
         section = target
     }
 
     BackHandler(enabled = section != TVSection.LIVE) {
         val interactionHandled = when (section) {
-            TVSection.LIBRARY,
             TVSection.MOVIES,
             TVSection.SERIES,
             -> PlaybackInteractionBridge.handleBack()
@@ -236,8 +231,6 @@ internal fun TVOwnPlayApp(
         when (section) {
             TVSection.MOVIES,
             TVSection.SERIES,
-            -> openSection(TVSection.LIBRARY)
-            TVSection.LIBRARY,
             TVSection.SETTINGS,
             -> openSection(TVSection.LIVE)
             TVSection.LIVE -> Unit
@@ -284,8 +277,6 @@ internal fun TVOwnPlayApp(
         if (resolvedSourceId == null) {
             requestedVodMovieId = null
             requestedSeriesId = null
-            movieDetailReturnToLibrary = false
-            seriesDetailReturnToLibrary = false
         }
     }
 
@@ -344,32 +335,17 @@ internal fun TVOwnPlayApp(
             summary.enabled &&
             summary.sourceId !in disabledSourceIds
     }
-    val librarySectionActive =
-        section == TVSection.LIBRARY ||
-            section == TVSection.MOVIES ||
-            section == TVSection.SERIES
-    val hidePrimaryNavigation = vodFullscreen || seriesFullscreen || libraryFullscreen
+    val hidePrimaryNavigation = vodFullscreen || seriesFullscreen
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            if (!hidePrimaryNavigation) {
-                TVPrimaryNavigationBar(
-                    liveSelected = section == TVSection.LIVE,
-                    librarySelected = librarySectionActive,
-                    settingsSelected = section == TVSection.SETTINGS,
-                    onOpenLive = { openSection(TVSection.LIVE) },
-                    onOpenLibrary = { openSection(TVSection.LIBRARY) },
-                    onOpenSettings = { openSection(TVSection.SETTINGS) },
-                )
-            }
-        },
-    ) { innerPadding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(innerPadding),
+                .padding(start = if (hidePrimaryNavigation) 0.dp else 82.dp),
         ) {
             when (section) {
                 TVSection.LIVE -> {
@@ -418,46 +394,12 @@ internal fun TVOwnPlayApp(
                     }
                 }
 
-                TVSection.LIBRARY -> UnifiedLibraryRoute(
-                    runtime = runtime,
-                    sourceId = activeSourceId,
-                    sourceKind = activeSummary?.sourceKind,
-                    onOpenMovieDetails = { sourceId, movieId ->
-                        rememberActiveSource(sourceId)
-                        runtime.onDemandPresentationSession.showMovieDetail(
-                            sourceId = sourceId,
-                            movieId = movieId,
-                            returnToLibraryOnDetailBack = true,
-                        )
-                        requestedVodMovieId = movieId
-                        movieDetailReturnToLibrary = true
-                        openSection(TVSection.MOVIES)
-                    },
-                    onOpenSeriesDetails = { sourceId, seriesId ->
-                        rememberActiveSource(sourceId)
-                        runtime.onDemandPresentationSession.showSeriesDetail(
-                            sourceId = sourceId,
-                            seriesId = seriesId,
-                            returnToLibraryOnDetailBack = true,
-                        )
-                        requestedSeriesId = seriesId
-                        seriesDetailReturnToLibrary = true
-                        openSection(TVSection.SERIES)
-                    },
-                    onFullscreenStateChanged = { fullscreen ->
-                        libraryFullscreen = fullscreen
-                        onPlaybackFullscreenChanged(fullscreen)
-                    },
-                )
-
                 TVSection.MOVIES -> VodRoute(
                     runtime = runtime,
                     sourceId = activeSourceId,
                     sourceKind = activeSummary?.sourceKind,
                     requestedMovieId = requestedVodMovieId,
                     onRequestedMovieConsumed = { requestedVodMovieId = null },
-                    returnToLibraryOnDetailBack = movieDetailReturnToLibrary,
-                    onReturnToLibrary = { openSection(TVSection.LIBRARY) },
                     onOpenLive = { openSection(TVSection.LIVE) },
                     onOpenSeries = { openSection(TVSection.SERIES) },
                     onOpenSettings = { openSection(TVSection.SETTINGS) },
@@ -470,8 +412,6 @@ internal fun TVOwnPlayApp(
                     sourceKind = activeSummary?.sourceKind,
                     requestedSeriesId = requestedSeriesId,
                     onRequestedSeriesConsumed = { requestedSeriesId = null },
-                    returnToLibraryOnDetailBack = seriesDetailReturnToLibrary,
-                    onReturnToLibrary = { openSection(TVSection.LIBRARY) },
                     onOpenSettings = { openSection(TVSection.SETTINGS) },
                     onFullscreenStateChanged = onPlaybackFullscreenChanged,
                 )
@@ -490,8 +430,7 @@ internal fun TVOwnPlayApp(
                     hasActivePlayback =
                         activeSelection != null ||
                             vodFullscreen ||
-                            seriesFullscreen ||
-                            libraryFullscreen,
+                            seriesFullscreen,
                     onOpenLive = { openSection(TVSection.LIVE) },
                     onOpenSourceInLive = { sourceId ->
                         if (sourceId != activeSourceId && activeSelection != null) {
@@ -516,48 +455,93 @@ internal fun TVOwnPlayApp(
                 )
             }
         }
+
+        if (!hidePrimaryNavigation) {
+            TVPrimaryNavigationRail(
+                selected = section,
+                onOpenLive = { openSection(TVSection.LIVE) },
+                onOpenMovies = { openSection(TVSection.MOVIES) },
+                onOpenSeries = { openSection(TVSection.SERIES) },
+                onOpenSettings = { openSection(TVSection.SETTINGS) },
+            )
+        }
     }
 }
 
 @Composable
-private fun TVPrimaryNavigationBar(
-    liveSelected: Boolean,
-    librarySelected: Boolean,
-    settingsSelected: Boolean,
+private fun TVPrimaryNavigationRail(
+    selected: TVSection,
     onOpenLive: () -> Unit,
-    onOpenLibrary: () -> Unit,
+    onOpenMovies: () -> Unit,
+    onOpenSeries: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f),
-        tonalElevation = 0.dp,
+    Column(
+        modifier = Modifier
+            .width(82.dp)
+            .fillMaxHeight()
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f))
+            .padding(vertical = 24.dp)
+            .focusGroup(),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(
-            modifier = Modifier.padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .background(
+                    MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(12.dp),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = "OwnPlay",
+                tint = Color.White,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             TVPrimaryNavigationItem(
                 label = "Live",
                 icon = Icons.Filled.LiveTv,
-                selected = liveSelected,
+                selected = selected == TVSection.LIVE,
                 onClick = onOpenLive,
             )
             TVPrimaryNavigationItem(
-                label = "Library",
+                label = "Movies",
+                icon = Icons.Filled.Movie,
+                selected = selected == TVSection.MOVIES,
+                onClick = onOpenMovies,
+            )
+            TVPrimaryNavigationItem(
+                label = "Series",
                 icon = Icons.Filled.VideoLibrary,
-                selected = librarySelected,
-                onClick = onOpenLibrary,
+                selected = selected == TVSection.SERIES,
+                onClick = onOpenSeries,
             )
             TVPrimaryNavigationItem(
                 label = "Settings",
                 icon = Icons.Filled.Settings,
-                selected = settingsSelected,
+                selected = selected == TVSection.SETTINGS,
                 onClick = onOpenSettings,
             )
         }
+
+        Spacer(Modifier.weight(1f))
+
+        Text(
+            text = "TV",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -569,44 +553,49 @@ private fun TVPrimaryNavigationItem(
     onClick: () -> Unit,
 ) {
     var focused by remember(label) { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val shape = RoundedCornerShape(12.dp)
+    val borderColor = when {
+        focused -> MaterialTheme.colorScheme.primary
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
+        else -> MaterialTheme.colorScheme.outline
+    }
+    val backgroundColor = when {
+        focused -> MaterialTheme.colorScheme.primaryContainer
+        selected -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surface
+    }
 
-    Surface(
+    Box(
         modifier = Modifier
-            .widthIn(min = 128.dp)
+            .size(52.dp)
+            .border(2.dp, borderColor, shape)
+            .background(backgroundColor, shape)
             .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) {
+                    false
+                } else {
+                    when (event.key) {
+                        Key.DirectionLeft -> true
+                        Key.DirectionRight -> focusManager.moveFocus(FocusDirection.Right)
+                        else -> false
+                    }
+                }
+            }
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = if (focused) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f)
-        } else {
-            Color.Transparent
-        },
-        tonalElevation = 0.dp,
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = when {
-                    focused -> MaterialTheme.colorScheme.onPrimaryContainer
-                    selected -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = when {
-                    focused -> MaterialTheme.colorScheme.onPrimaryContainer
-                    selected -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurface
-                },
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = when {
+                focused -> MaterialTheme.colorScheme.onPrimaryContainer
+                selected -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 

@@ -19,8 +19,12 @@ class OnDemandPresentationLifecycleRegressionTest {
             assertTrue(shell.contains("val seriesFullscreen = onDemandPresentation.isSeriesPlayback"))
             assertFalse(shell.contains("var vodFullscreen by remember"))
             assertFalse(shell.contains("var seriesFullscreen by remember"))
-            assertTrue(shell.contains("runtime.onDemandPresentationSession.showMovieDetail("))
-            assertTrue(shell.contains("runtime.onDemandPresentationSession.showSeriesDetail("))
+            assertTrue(shell.contains("OnDemandContentKind.MOVIE -> TVSection.MOVIES"))
+            assertTrue(shell.contains("OnDemandContentKind.SERIES -> TVSection.SERIES"))
+            assertTrue(shell.contains("requestedMovieId = requestedVodMovieId"))
+            assertTrue(shell.contains("requestedSeriesId = requestedSeriesId"))
+            assertTrue(shell.contains("onRequestedMovieConsumed = { requestedVodMovieId = null }"))
+            assertTrue(shell.contains("onRequestedSeriesConsumed = { requestedSeriesId = null }"))
         }
     }
 

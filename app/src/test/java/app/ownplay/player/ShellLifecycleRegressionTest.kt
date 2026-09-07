@@ -96,12 +96,14 @@ class ShellLifecycleRegressionTest {
 
             assertTrue("$path must give detail/playback back actions priority", block.contains("PlaybackInteractionBridge.handleBack()"))
             assertTrue(
-                "$path must return Movies/Series catalog roots to Library",
-                block.contains("$sectionType.MOVIES, $sectionType.SERIES, -> openSection($sectionType.LIBRARY)"),
+                "$path must return Movies/Series/Settings roots directly to Live",
+                block.contains(
+                    "$sectionType.MOVIES, $sectionType.SERIES, $sectionType.SETTINGS, -> openSection($sectionType.LIVE)",
+                ),
             )
-            assertTrue(
-                "$path must return Library/Settings roots to Live",
-                block.contains("$sectionType.LIBRARY, $sectionType.SETTINGS, -> openSection($sectionType.LIVE)"),
+            assertFalse(
+                "$path must not route Back through the removed Library destination",
+                block.contains("$sectionType.LIBRARY"),
             )
             assertFalse("$path shell fallback must never show exit itself", block.contains("showExitConfirmation"))
         }
