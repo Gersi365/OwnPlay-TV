@@ -1,0 +1,130 @@
+name: Validate final TV-only foundation
+
+on:
+  push:
+    branches:
+      - agent/tv-only-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.event.head_commit.message == 'Add final TV-only foundation validator'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout foundation branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/tv-only-foundation
+          fetch-depth: 0
+
+      - name: Remove temporary validator and establish final HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/validate-tv-only-foundation-final.yml
+          git config user.name 'OwnPlay TV Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remove temporary TV-only foundation validator'
+          git push origin HEAD:agent/tv-only-foundation
+          echo "FINAL_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Verify TV-only source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+          test ! -d app/src/tv
+          test ! -d app/src/tvDebug
+          test ! -d app/src/mobile
+          test ! -d app/src/testMobile
+          test -d app/src/main
+          test -d app/src/debug
+          grep -Fq 'applicationId = "app.ownplay.tv"' app/build.gradle.kts
+          grep -Fq 'android:screenOrientation="landscape"' app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt
+          test -f app/src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveViewModes.kt
+          test -f app/src/main/java/app/ownplay/player/ui/live/TvLiveWorkspaceAdaptive.kt
+          test -f app/src/debug/java/app/ownplay/player/prototype/TvVisualPrototypeScreens.kt
+          test ! -e .github/workflows/validate-tv-only-foundation-final.yml
+
+          if grep -RInE 'create\("mobile"\)|app\.ownplay\.mobile|IS_TV_BUILD|TARGET_DEVICE|AppDeviceProfile|AppOrientation|SMARTPHONE|TOUCHSCREEN|PORTRAIT|PortraitLive|SettingsLandscape|PictureInPicture|rotationFullscreen|GestureDetector|dispatchTouchEvent' app/src app/build.gradle.kts; then
+            echo 'Forbidden mobile/form-factor residue remains.' >&2
+            exit 2
+          fi
+          if grep -RInE 'Configuration\.ORIENTATION_(LANDSCAPE|PORTRAIT)|isLandscape|isPortrait|UI_MODE_TYPE_TELEVISION|isTelevision|MobileFullscreen|MOBILE_' app/src; then
+            echo 'Forbidden runtime form-factor residue remains.' >&2
+            exit 3
+          fi
+          if grep -RInE 'detectTapGestures|detectDragGesturesAfterLongPress|pointerInput' app/src/main/java/app/ownplay/player/ui; then
+            echo 'Forbidden touch-only UI interaction residue remains.' >&2
+            exit 4
+          fi
+          if grep -RInE '"All"' app/src/main/java/app/ownplay/player/ui app/src/debug/java/app/ownplay/player/prototype; then
+            echo 'Forbidden visible All label remains in TV UI source.' >&2
+            exit 5
+          fi
+          if grep -RInE 'mobile resume|mobile lifecycle|Mobile resume|Mobile lifecycle' app/src/test; then
+            echo 'Obsolete mobile lifecycle test residue remains.' >&2
+            exit 6
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.5.0'
+          cache-read-only: true
+
+      - name: Validate exact final HEAD without APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+          gradle \
+            :app:kspDebugKotlin \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:compileDebugAndroidTestKotlin \
+            --stacktrace
+
+      - name: Verify zero APK and Room stability
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(find app/build -type f -name '*.apk' -print 2>/dev/null | tee /tmp/ownplay-tv-apks.txt | wc -l)"
+          echo "APK artifacts: ${count}"
+          test "$count" -eq 0
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          import sys
+
+          root = pathlib.Path('app/schemas')
+          problems = []
+          generated = sorted(root.rglob('*.json'))
+          if not generated:
+              problems.append('No Room schema JSON found.')
+          for path in generated:
+              relative = path.as_posix()
+              committed = subprocess.check_output(['git', 'show', f'HEAD:{relative}'], text=True)
+              if json.loads(path.read_text(encoding='utf-8')) != json.loads(committed):
+                  problems.append(f'Room schema drift: {relative}')
+          if problems:
+              print('\n'.join(problems))
+              sys.exit(7)
+          print(f'Validated {len(generated)} committed Room schema files.')
+          PY
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+          echo "Validated final HEAD: $FINAL_HEAD"
