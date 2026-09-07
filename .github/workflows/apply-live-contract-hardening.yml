@@ -20,12 +20,12 @@ jobs:
           ref: agent/live-contract-hardening-no-apk
           fetch-depth: 0
 
-      - name: Verify authorized base
+      - name: Verify authorized base and unchanged source
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "7095974a8f94556b8d250aaf28bc52fa98d15d39"
-          git diff --quiet 7095974a8f94556b8d250aaf28bc52fa98d15d39 HEAD^ -- app OwnPlay_TV_SOURCE.md OwnPlay_TV_UI_INTERACTION_CONTRACT.md OwnPlay_TV_ENGINEERING_WORKFLOW.md
+          git merge-base --is-ancestor 7095974a8f94556b8d250aaf28bc52fa98d15d39 HEAD
+          git diff --quiet 7095974a8f94556b8d250aaf28bc52fa98d15d39 HEAD -- app OwnPlay_TV_SOURCE.md OwnPlay_TV_UI_INTERACTION_CONTRACT.md OwnPlay_TV_ENGINEERING_WORKFLOW.md
 
       - name: Harden Live Preview Full View contract
         shell: bash
@@ -64,21 +64,16 @@ jobs:
           route = Path('app/src/main/java/app/ownplay/player/ui/LiveRoute.kt')
           text = route.read_text(encoding='utf-8')
           text = text.replace('import app.ownplay.player.playback.PlaybackNavigationDirection\n', '')
-          for fragment in (
-              '    onPlay: () -> Unit,\n',
-              '    onPause: () -> Unit,\n',
-              '    onRetry: () -> Unit,\n',
-              '    onNavigatePreview: (PlaybackNavigationDirection) -> Unit,\n',
-              '        onPlay = onPlay,\n',
-              '        onPause = onPause,\n',
-              '        onRetry = onRetry,\n',
-              '        onNavigatePreview = onNavigatePreview,\n',
-              '        onOpenFullscreen = onOpenFullscreen,\n',
-              '        onPreviewClosed = onPreviewClosed,\n',
-          ):
-              if text.count(fragment) != 1:
-                  raise RuntimeError(f'LiveRoute cleanup expected one match: {fragment!r}')
-              text = text.replace(fragment, '', 1)
+          signature_old = '''    syncState: SourceSyncState,\n    onPlay: () -> Unit,\n    onPause: () -> Unit,\n    onRetry: () -> Unit,\n    onOpenMovies: () -> Unit,\n    onOpenSeries: () -> Unit,\n    onOpenSettings: () -> Unit,\n    onPreviewRequested: (LivePlaybackSelection) -> Unit,\n    onPreviewClosed: () -> Unit,\n    onOpenFullscreen: (LivePlaybackSelection) -> Unit,\n    onNavigatePreview: (PlaybackNavigationDirection) -> Unit,\n'''
+          signature_new = '''    syncState: SourceSyncState,\n    onOpenMovies: () -> Unit,\n    onOpenSeries: () -> Unit,\n    onOpenSettings: () -> Unit,\n    onPreviewRequested: (LivePlaybackSelection) -> Unit,\n    onPreviewClosed: () -> Unit,\n    onOpenFullscreen: (LivePlaybackSelection) -> Unit,\n'''
+          if text.count(signature_old) != 1:
+              raise RuntimeError('LiveRoute Preview callback signature block mismatch')
+          text = text.replace(signature_old, signature_new, 1)
+          call_old = '''        onChannelSelected = ::selectChannel,\n        onPlay = onPlay,\n        onPause = onPause,\n        onRetry = onRetry,\n        onNavigatePreview = onNavigatePreview,\n        onOpenFullscreen = onOpenFullscreen,\n        onPreviewClosed = onPreviewClosed,\n        onOpenEpgGuide = { showEpgGuide = true },\n'''
+          call_new = '''        onChannelSelected = ::selectChannel,\n        onOpenEpgGuide = { showEpgGuide = true },\n'''
+          if text.count(call_old) != 1:
+              raise RuntimeError('LiveRoute workspace callback block mismatch')
+          text = text.replace(call_old, call_new, 1)
           route.write_text(text, encoding='utf-8')
 
           workspace = Path('app/src/main/java/app/ownplay/player/ui/live/TvLiveWorkspaceAdaptive.kt')
@@ -88,23 +83,16 @@ jobs:
               ' * Landscape Live shell with one consistent browse model across touch and TV layouts.\n',
               ' * TV-only Live workspace with one deterministic remote-first browse model.\n',
           )
-          for fragment in (
-              '    onPlay: () -> Unit,\n',
-              '    onPause: () -> Unit,\n',
-              '    onRetry: () -> Unit,\n',
-              '    onNavigatePreview: (PlaybackNavigationDirection) -> Unit,\n',
-              '    onOpenFullscreen: (LivePlaybackSelection) -> Unit,\n',
-              '    onPreviewClosed: () -> Unit,\n',
-              '                    onPlay = onPlay,\n',
-              '                    onPause = onPause,\n',
-              '                    onRetry = onRetry,\n',
-              '                    onNavigate = onNavigatePreview,\n',
-              '                    onOpenFullscreen = { onOpenFullscreen(preview) },\n',
-              '                    onClose = onPreviewClosed,\n',
-          ):
-              if text.count(fragment) != 1:
-                  raise RuntimeError(f'Workspace cleanup expected one match: {fragment!r}')
-              text = text.replace(fragment, '', 1)
+          signature_old = '''    onCustomGroupSelected: (String?) -> Unit,\n    onChannelSelected: (String) -> Unit,\n    onPlay: () -> Unit,\n    onPause: () -> Unit,\n    onRetry: () -> Unit,\n    onNavigatePreview: (PlaybackNavigationDirection) -> Unit,\n    onOpenFullscreen: (LivePlaybackSelection) -> Unit,\n    onPreviewClosed: () -> Unit,\n    onOpenEpgGuide: () -> Unit,\n'''
+          signature_new = '''    onCustomGroupSelected: (String?) -> Unit,\n    onChannelSelected: (String) -> Unit,\n    onOpenEpgGuide: () -> Unit,\n'''
+          if text.count(signature_old) != 1:
+              raise RuntimeError('Workspace Preview callback signature block mismatch')
+          text = text.replace(signature_old, signature_new, 1)
+          preview_call_old = '''                    selection = preview,\n                    state = playbackState,\n                    videoOutput = videoOutput,\n                    onPlay = onPlay,\n                    onPause = onPause,\n                    onRetry = onRetry,\n                    onNavigate = onNavigatePreview,\n                    onOpenFullscreen = { onOpenFullscreen(preview) },\n                    onClose = onPreviewClosed,\n                    modifier = Modifier.fillMaxWidth(),\n'''
+          preview_call_new = '''                    selection = preview,\n                    state = playbackState,\n                    videoOutput = videoOutput,\n                    modifier = Modifier.fillMaxWidth(),\n'''
+          if text.count(preview_call_old) != 1:
+              raise RuntimeError('Workspace LivePreviewPanel call block mismatch')
+          text = text.replace(preview_call_old, preview_call_new, 1)
           replacements = {
               'LandscapeBrowseSurface': 'TvLiveBrowseSurface',
               'LandscapeLiveFocusZone': 'TvLiveFocusZone',
@@ -121,18 +109,11 @@ jobs:
           text = preview.read_text(encoding='utf-8')
           text = text.replace('import app.ownplay.player.playback.PlaybackNavigationDirection\n', '')
           text = text.replace('@Suppress("UNUSED_PARAMETER")\n', '')
-          for fragment in (
-              '    onPlay: () -> Unit,\n',
-              '    onPause: () -> Unit,\n',
-              '    onRetry: () -> Unit,\n',
-              '    onNavigate: (PlaybackNavigationDirection) -> Unit,\n',
-              '    onOpenFullscreen: () -> Unit,\n',
-              '    onClose: () -> Unit,\n',
-          ):
-              if text.count(fragment) != 1:
-                  raise RuntimeError(f'Preview API cleanup expected one match: {fragment!r}')
-              text = text.replace(fragment, '', 1)
-          preview.write_text(text, encoding='utf-8')
+          callback_block = '''    videoOutput: PlaybackVideoOutput,\n    onPlay: () -> Unit,\n    onPause: () -> Unit,\n    onRetry: () -> Unit,\n    onNavigate: (PlaybackNavigationDirection) -> Unit,\n    onOpenFullscreen: () -> Unit,\n    onClose: () -> Unit,\n    modifier: Modifier = Modifier,\n'''
+          replacement = '''    videoOutput: PlaybackVideoOutput,\n    modifier: Modifier = Modifier,\n'''
+          if text.count(callback_block) != 1:
+              raise RuntimeError('LivePreviewPanel callback block mismatch')
+          preview.write_text(text.replace(callback_block, replacement, 1), encoding='utf-8')
 
           old_test = Path('app/src/test/java/app/ownplay/player/ui/live/LandscapeLiveFocusPolicyTest.kt')
           new_test = Path('app/src/test/java/app/ownplay/player/ui/live/TvLiveFocusPolicyTest.kt')
@@ -157,15 +138,12 @@ jobs:
           test = '''    @Test\n    fun rapidPreviewToFullscreenAcknowledgesPreviewBeforeSecondActivation() {\n        val source = sourceText("src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt")\n        val callback = source\n            .substringAfter("onPreviewRequested = { selection ->")\n            .substringBefore("onPreviewClosed =")\n\n        val showPreview = callback.indexOf("runtime.livePlaybackPresentationSession.showPreview(selection)")\n        val startPlayback = callback.indexOf("runtime.playbackController.start(selection.request)")\n        val acknowledgePreview = callback.indexOf("liveTransitionGate.reconcileObserved(")\n        val previewTarget = callback.indexOf("LivePlaybackTransitionTarget.preview(selection)")\n\n        assertTrue(showPreview >= 0)\n        assertTrue(showPreview < startPlayback)\n        assertTrue(startPlayback < acknowledgePreview)\n        assertTrue(acknowledgePreview < previewTarget)\n    }\n\n'''
           lifecycle.write_text(text.replace(marker, test + marker, 1), encoding='utf-8')
 
-          preview_contract = Path('app/src/test/java/app/ownplay/player/ui/LivePreviewPresentationContractTest.kt')
-          preview_contract.write_text('''package app.ownplay.player.ui\n\nimport app.ownplay.player.testing.sourceText\nimport org.junit.Assert.assertFalse\nimport org.junit.Assert.assertTrue\nimport org.junit.Test\n\nclass LivePreviewPresentationContractTest {\n    @Test\n    fun `preview is presentation only and cannot expose playback actions`() {\n        val preview = sourceText("src/main/java/app/ownplay/player/ui/LivePreviewPanel.kt")\n\n        assertTrue(preview.contains("useController = false"))\n        assertFalse(preview.contains("onPlay:"))\n        assertFalse(preview.contains("onPause:"))\n        assertFalse(preview.contains("onRetry:"))\n        assertFalse(preview.contains("onNavigate:"))\n        assertFalse(preview.contains("onOpenFullscreen:"))\n        assertFalse(preview.contains("onClose:"))\n        assertFalse(preview.contains("TextButton("))\n        assertFalse(preview.contains("IconButton("))\n    }\n\n    @Test\n    fun `live workspace is TV only with browse owned preview focus`() {\n        val workspace = sourceText("src/main/java/app/ownplay/player/ui/live/TvLiveWorkspaceAdaptive.kt")\n\n        assertTrue(workspace.contains("TvLiveFocusPolicy"))\n        assertTrue(workspace.contains("Preview is presentation-only"))\n        assertFalse(workspace.contains("LandscapeLive"))\n        assertFalse(workspace.contains("LandscapeBrowseSurface"))\n        assertFalse(workspace.contains("touch and TV"))\n    }\n}\n''', encoding='utf-8')
+          Path('app/src/test/java/app/ownplay/player/ui/LivePreviewPresentationContractTest.kt').write_text('''package app.ownplay.player.ui\n\nimport app.ownplay.player.testing.sourceText\nimport org.junit.Assert.assertFalse\nimport org.junit.Assert.assertTrue\nimport org.junit.Test\n\nclass LivePreviewPresentationContractTest {\n    @Test\n    fun `preview is presentation only and cannot expose playback actions`() {\n        val preview = sourceText("src/main/java/app/ownplay/player/ui/LivePreviewPanel.kt")\n\n        assertTrue(preview.contains("useController = false"))\n        assertFalse(preview.contains("onPlay:"))\n        assertFalse(preview.contains("onPause:"))\n        assertFalse(preview.contains("onRetry:"))\n        assertFalse(preview.contains("onNavigate:"))\n        assertFalse(preview.contains("onOpenFullscreen:"))\n        assertFalse(preview.contains("onClose:"))\n        assertFalse(preview.contains("TextButton("))\n        assertFalse(preview.contains("IconButton("))\n    }\n\n    @Test\n    fun `live workspace is TV only with browse owned preview focus`() {\n        val workspace = sourceText("src/main/java/app/ownplay/player/ui/live/TvLiveWorkspaceAdaptive.kt")\n\n        assertTrue(workspace.contains("TvLiveFocusPolicy"))\n        assertTrue(workspace.contains("Preview is presentation-only"))\n        assertFalse(workspace.contains("LandscapeLive"))\n        assertFalse(workspace.contains("LandscapeBrowseSurface"))\n        assertFalse(workspace.contains("touch and TV"))\n    }\n}\n''', encoding='utf-8')
 
-          provider_contract = Path('app/src/test/java/app/ownplay/player/live/LiveProviderCategoryContractTest.kt')
-          provider_contract.write_text('''package app.ownplay.player.live\n\nimport app.ownplay.player.testing.sourceText\nimport org.junit.Assert.assertTrue\nimport org.junit.Test\n\nclass LiveProviderCategoryContractTest {\n    @Test\n    fun `content categories project directly from provider snapshot`() {\n        val source = sourceText("src/main/java/app/ownplay/player/live/LiveBrowseState.kt")\n\n        assertTrue(source.contains("cachedCategories = snapshot.categories"))\n        assertTrue(source.contains("categories = cachedCategories"))\n        assertTrue(source.contains("customGroups = cachedCustomGroups"))\n        assertTrue(source.contains("favoritesOnly = enabled"))\n    }\n}\n''', encoding='utf-8')
+          Path('app/src/test/java/app/ownplay/player/live/LiveProviderCategoryContractTest.kt').write_text('''package app.ownplay.player.live\n\nimport app.ownplay.player.testing.sourceText\nimport org.junit.Assert.assertTrue\nimport org.junit.Test\n\nclass LiveProviderCategoryContractTest {\n    @Test\n    fun `content categories project directly from provider snapshot`() {\n        val source = sourceText("src/main/java/app/ownplay/player/live/LiveBrowseState.kt")\n\n        assertTrue(source.contains("cachedCategories = snapshot.categories"))\n        assertTrue(source.contains("categories = cachedCategories"))\n        assertTrue(source.contains("customGroups = cachedCustomGroups"))\n        assertTrue(source.contains("favoritesOnly = enabled"))\n    }\n}\n''', encoding='utf-8')
           PY
 
           git diff --check
-
           if grep -RInE 'LandscapeLive|LandscapeBrowseSurface|touch and TV' \
             app/src/main/java/app/ownplay/player/ui/LiveRoute.kt \
             app/src/main/java/app/ownplay/player/ui/LivePreviewPanel.kt \
