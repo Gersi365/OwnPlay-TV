@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -62,7 +63,6 @@ private enum class TvSettingsPage {
     ABOUT,
 }
 
-@Suppress("UNUSED_PARAMETER")
 @Composable
 internal fun TvSettingsScreen(
     runtime: OwnPlayAppRuntime,
@@ -70,11 +70,7 @@ internal fun TvSettingsScreen(
     disabledSourceIds: Set<String>,
     onSetSourceEnabled: (String, Boolean) -> Unit,
     syncState: SourceSyncState,
-    activeSourceName: String?,
-    hasActivePlayback: Boolean,
-    onOpenLive: () -> Unit,
     onOpenSourceInLive: (String) -> Unit,
-    onStopPlayback: () -> Unit,
 ) {
     var page by remember { mutableStateOf(TvSettingsPage.ROOT) }
     var lastRootDestination by remember { mutableStateOf(TvSettingsDestination.PLAYLISTS) }
@@ -88,6 +84,7 @@ internal fun TvSettingsScreen(
 
     LaunchedEffect(page, lastRootDestination) {
         if (page == TvSettingsPage.ROOT) {
+            withFrameNanos { }
             rootFocusRequesters.getValue(lastRootDestination).requestFocus()
         }
     }
@@ -384,6 +381,7 @@ private fun TvSettingsInformationPage(
     val backFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(initialContentFocusRequester) {
+        withFrameNanos { }
         (initialContentFocusRequester ?: backFocusRequester).requestFocus()
     }
 

@@ -418,12 +418,6 @@ internal fun TVOwnPlayApp(
                         }
                     },
                     syncState = syncState,
-                    activeSourceName = activeSummary?.name,
-                    hasActivePlayback =
-                        activeSelection != null ||
-                            vodFullscreen ||
-                            seriesFullscreen,
-                    onOpenLive = { openSection(TVSection.LIVE) },
                     onOpenSourceInLive = { sourceId ->
                         if (sourceId != activeSourceId && activeSelection != null) {
                             stopLivePresentation {
@@ -433,16 +427,6 @@ internal fun TVOwnPlayApp(
                         rememberActiveSource(sourceId)
                         runtime.onDemandPresentationSession.clear()
                         section = TVSection.LIVE
-                    },
-                    onStopPlayback = {
-                        if (activeSelection != null || fullscreenSelection != null) {
-                            stopLivePresentation {
-                                runtime.livePlaybackPresentationSession.clear()
-                            }
-                        } else {
-                            runtime.playbackController.stop()
-                            runtime.onDemandPresentationSession.clear()
-                        }
                     },
                 )
             }

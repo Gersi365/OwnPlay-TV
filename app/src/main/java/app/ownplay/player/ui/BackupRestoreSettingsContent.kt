@@ -97,9 +97,9 @@ internal fun BackupRestoreSettingsContent(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         SettingsActionRow(
-            title = "Backup personalization",
+            title = "Create backup",
             detail = "Personalization only · credentials excluded",
-            actionLabel = "Export",
+            actionLabel = "Create",
             onClick = { exportLauncher.launch("ownplay-personalization-v1.json") },
             modifier = if (initialFocusRequester != null) {
                 Modifier.focusRequester(initialFocusRequester)
@@ -109,9 +109,9 @@ internal fun BackupRestoreSettingsContent(
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         SettingsActionRow(
-            title = "Restore personalization",
+            title = "Restore backup",
             detail = "Import a previous OwnPlay personalization backup",
-            actionLabel = "Import",
+            actionLabel = "Restore",
             onClick = {
                 importLauncher.launch(arrayOf("application/json", "text/plain"))
             },
