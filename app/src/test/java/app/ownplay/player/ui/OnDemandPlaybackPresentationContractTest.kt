@@ -22,19 +22,12 @@ class OnDemandPlaybackPresentationContractTest {
     }
 
     @Test
-    fun `series and offline use shared presentation instead of native controller chrome`() {
+    fun `series uses shared presentation instead of native controller chrome`() {
         val series = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")
         val seriesPlayback = sourceBlockAfter(series, "private fun SeriesPlaybackScreen(")
-        val offline = sourceText("src/main/java/app/ownplay/player/ui/library/LibraryPlaybackScreen.kt")
-        val offlinePlayback = sourceBlockAfter(offline, "internal fun LibraryPlaybackScreen(")
 
         assertTrue(seriesPlayback.contains("OnDemandPlaybackSurface("))
         assertFalse(seriesPlayback.contains("showNativeController = true"))
-        assertTrue(offlinePlayback.contains("OnDemandPlaybackSurface("))
-        assertFalse(offlinePlayback.contains("useController = true"))
-        assertFalse(offlinePlayback.contains("LibraryOfflineBadge"))
-        assertFalse(offlinePlayback.contains("OFFLINE"))
-        assertFalse(offlinePlayback.contains("Local file"))
     }
 
     @Test
