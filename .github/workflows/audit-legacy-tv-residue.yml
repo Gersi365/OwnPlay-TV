@@ -1,0 +1,47 @@
+name: Audit OwnPlay TV legacy residue
+
+on:
+  push:
+    branches:
+      - agent/legacy-deletion-hardening-no-apk
+    paths:
+      - .github/workflows/audit-legacy-tv-residue.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact legacy audit branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/legacy-deletion-hardening-no-apk
+          fetch-depth: 0
+
+      - name: Verify authorized base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "e2271bfbb620acc68ad5875fd32cd6cb42ce67ac"
+          git diff --quiet e2271bfbb620acc68ad5875fd32cd6cb42ce67ac HEAD^ -- app OwnPlay_TV_SOURCE.md OwnPlay_TV_UI_INTERACTION_CONTRACT.md OwnPlay_TV_ENGINEERING_WORKFLOW.md
+
+      - name: Audit legacy presentation references
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== ui/library files ==='
+          find app/src/main/java/app/ownplay/player/ui/library -type f -maxdepth 1 -print | sort || true
+          echo '=== external imports/references to ui.library ==='
+          grep -RInE 'app\.ownplay\.player\.ui\.library|UnifiedLibraryRoute|LibraryPlaybackScreen|LibraryPlaybackPresentationSession|LibraryContinueWatching|LibraryCatalogRefreshDemand|LibraryOfflinePresentation|LibrarySeriesComponents|LibrarySeriesGrouping' app/src/main app/src/test app/src/androidTest \
+            --exclude-dir=library || true
+          echo '=== debug prototype files and manifest references ==='
+          find app/src/debug -type f -print | sort || true
+          grep -RInE 'prototype|TvVisualPrototype|VisualPrototype' app/src/main app/src/debug app/src/test app/src/androidTest || true
+          echo '=== TV product-surface residue names ==='
+          grep -RInE 'Downloads|Offline media|OfflineMedia|UnifiedLibrary|TVSection\.LIBRARY|onOpenLibrary|LibraryRoute' app/src/main/java/app/ownplay/player/ui app/src/test/java/app/ownplay/player/ui || true
+          echo '=== active shell imports/routes ==='
+          grep -nE '^import app\.ownplay\.player\.ui\.|TVSection\.|VodRoute\(|SeriesRoute\(|LiveRoute\(|TvSettingsScreen\(' app/src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt || true
+          echo '=== exact audit HEAD ==='
+          git rev-parse HEAD
