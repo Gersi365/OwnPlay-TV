@@ -1,5 +1,6 @@
 package app.ownplay.player.ui.series
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,13 +27,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,10 +62,15 @@ internal fun SeriesDetailsPane(
     selectedEpisodeId: String?,
     downloads: List<OfflineDownload>,
     focusBackOnEntry: Boolean,
+    restoreSeasonFocusNumber: Int?,
+    restoreEpisodeFocusId: String?,
+    onSeasonFocusRestored: () -> Unit,
+    onEpisodeFocusRestored: () -> Unit,
     onSeasonSelected: (Int) -> Unit,
     onEpisodeSelected: (String) -> Unit,
     onFavoriteChanged: (Boolean) -> Unit,
     onPlay: (SeriesEpisode) -> Unit,
+    onPlayFromBeginning: (SeriesEpisode) -> Unit,
     onDownload: (SeriesEpisode) -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
     onResumeDownload: (OfflineDownload) -> Unit,
@@ -78,16 +89,18 @@ internal fun SeriesDetailsPane(
         selected.seriesId,
         selectedSeasonNumber,
         selectedEpisodeId,
+        restoreSeasonFocusNumber,
+        restoreEpisodeFocusId,
         details?.seasons?.size,
         selectedSeason?.episodes?.size,
     ) {
-        val primaryTargetAvailable = when {
+        val shouldFocusPrimary = when {
             selectedEpisode != null -> true
-            selectedSeason != null -> selectedSeason.episodes.isNotEmpty()
-            details != null -> true
+            selectedSeason != null -> restoreEpisodeFocusId == null && selectedSeason.episodes.isNotEmpty()
+            details != null -> restoreSeasonFocusNumber == null
             else -> false
         }
-        if (!primaryTargetAvailable) return@LaunchedEffect
+        if (!shouldFocusPrimary) return@LaunchedEffect
         withFrameNanos { }
         primaryActionFocusRequester.requestFocus()
     }
@@ -163,6 +176,7 @@ internal fun SeriesDetailsPane(
                             },
                             playFocusRequester = primaryActionFocusRequester,
                             onPlay = { onPlay(selectedEpisode) },
+                            onPlayFromBeginning = { onPlayFromBeginning(selectedEpisode) },
                             onDownload = { onDownload(selectedEpisode) },
                             onPauseDownload = onPauseDownload,
                             onResumeDownload = onResumeDownload,
@@ -211,12 +225,15 @@ internal fun SeriesDetailsPane(
                                         episode = episode,
                                         download = download,
                                         onOpen = { onEpisodeSelected(episode.episodeId) },
-                                        playFocusRequester = if (episode.episodeId == firstEpisodeId) {
+                                        entryFocusRequester = if (episode.episodeId == firstEpisodeId) {
                                             primaryActionFocusRequester
                                         } else {
                                             null
                                         },
+                                        restoreFocus = restoreEpisodeFocusId == episode.episodeId,
+                                        onFocusRestored = onEpisodeFocusRestored,
                                         onPlay = { onPlay(episode) },
+                                        onPlayFromBeginning = { onPlayFromBeginning(episode) },
                                         onDownload = { onDownload(episode) },
                                         onPauseDownload = onPauseDownload,
                                         onResumeDownload = onResumeDownload,
@@ -264,11 +281,13 @@ internal fun SeriesDetailsPane(
                                         series = selected,
                                         season = season,
                                         onClick = { onSeasonSelected(season.seasonNumber) },
-                                        modifier = if (season.seasonId == firstSeasonId) {
-                                            Modifier.focusRequester(primaryActionFocusRequester)
+                                        entryFocusRequester = if (season.seasonId == firstSeasonId) {
+                                            primaryActionFocusRequester
                                         } else {
-                                            Modifier
+                                            null
                                         },
+                                        restoreFocus = restoreSeasonFocusNumber == season.seasonNumber,
+                                        onFocusRestored = onSeasonFocusRestored,
                                     )
                                 }
                             }
@@ -285,11 +304,31 @@ private fun SeriesSeasonRow(
     series: SeriesSummary,
     season: SeriesSeason,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    entryFocusRequester: FocusRequester?,
+    restoreFocus: Boolean,
+    onFocusRestored: () -> Unit,
 ) {
+    val localFocusRequester = remember(season.seasonId) { FocusRequester() }
+    val focusRequester = entryFocusRequester ?: localFocusRequester
+    var focused by remember(season.seasonId) { mutableStateOf(false) }
+
+    LaunchedEffect(restoreFocus, season.seasonId) {
+        if (!restoreFocus) return@LaunchedEffect
+        withFrameNanos { }
+        localFocusRequester.requestFocus()
+        onFocusRestored()
+    }
+
     Surface(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+            )
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
@@ -387,6 +426,7 @@ private fun SeriesEpisodeDetailsPane(
     download: OfflineDownload?,
     playFocusRequester: FocusRequester,
     onPlay: () -> Unit,
+    onPlayFromBeginning: () -> Unit,
     onDownload: () -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
     onResumeDownload: (OfflineDownload) -> Unit,
@@ -454,8 +494,11 @@ private fun SeriesEpisodeDetailsPane(
         download = download,
         onOpen = null,
         showHeader = false,
-        playFocusRequester = playFocusRequester,
+        entryFocusRequester = playFocusRequester,
+        restoreFocus = false,
+        onFocusRestored = {},
         onPlay = onPlay,
+        onPlayFromBeginning = onPlayFromBeginning,
         onDownload = onDownload,
         onPauseDownload = onPauseDownload,
         onResumeDownload = onResumeDownload,
@@ -471,8 +514,11 @@ private fun EpisodeRow(
     download: OfflineDownload?,
     onOpen: (() -> Unit)? = null,
     showHeader: Boolean = true,
-    playFocusRequester: FocusRequester? = null,
+    entryFocusRequester: FocusRequester? = null,
+    restoreFocus: Boolean = false,
+    onFocusRestored: () -> Unit = {},
     onPlay: () -> Unit,
+    onPlayFromBeginning: () -> Unit,
     onDownload: () -> Unit,
     onPauseDownload: (OfflineDownload) -> Unit,
     onResumeDownload: (OfflineDownload) -> Unit,
@@ -480,11 +526,29 @@ private fun EpisodeRow(
     onRemoveDownload: (OfflineDownload) -> Unit,
     onClearProgress: () -> Unit,
 ) {
+    val localFocusRequester = remember(episode.episodeId) { FocusRequester() }
+    val rowFocusRequester = entryFocusRequester ?: localFocusRequester
+    var focused by remember(episode.episodeId) { mutableStateOf(false) }
+
+    LaunchedEffect(restoreFocus, episode.episodeId) {
+        if (!restoreFocus || onOpen == null) return@LaunchedEffect
+        withFrameNanos { }
+        localFocusRequester.requestFocus()
+        onFocusRestored()
+    }
+
     val rowModifier = if (onOpen == null) {
         Modifier.fillMaxWidth()
     } else {
         Modifier
             .fillMaxWidth()
+            .focusRequester(rowFocusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(10.dp),
+            )
             .clickable(onClick = onOpen)
     }
 
@@ -513,36 +577,41 @@ private fun EpisodeRow(
                         )
                         episode.positionMs?.takeIf { it > 0L }?.let {
                             Text(
-                                if (episode.resumeAvailable) "Resume available" else "Watched",
+                                if (episode.resumeAvailable) "Continue available" else "Watched",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                    if (onOpen != null) {
-                        Text(
-                            "Details",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
+                    Text(
+                        "Details",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium,
+                    )
                 }
             }
-            Row(
-                modifier = Modifier.padding(top = if (showHeader) 7.dp else 0.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Button(
-                    onClick = onPlay,
-                    modifier = playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
-                    shape = RoundedCornerShape(10.dp),
+            if (onOpen == null) {
+                Row(
+                    modifier = Modifier.padding(top = if (showHeader) 7.dp else 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(if (episode.resumeAvailable) "Resume" else "Play")
-                }
-                if ((episode.positionMs ?: 0L) > 0L) {
-                    TextButton(onClick = onClearProgress) { Text("Clear") }
+                    Button(
+                        onClick = onPlay,
+                        modifier = entryFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Text(if (episode.resumeAvailable) "Continue" else "Play")
+                    }
+                    if (episode.resumeAvailable) {
+                        TextButton(onClick = onPlayFromBeginning) {
+                            Text("Play from beginning")
+                        }
+                    }
+                    if ((episode.positionMs ?: 0L) > 0L) {
+                        TextButton(onClick = onClearProgress) { Text("Clear") }
+                    }
                 }
             }
         }

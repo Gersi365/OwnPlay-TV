@@ -1,6 +1,7 @@
 package app.ownplay.player.ui.series
 
 import androidx.annotation.OptIn
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,10 +42,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -150,7 +157,12 @@ internal fun SeriesRoute(
     var selectedEpisodeId by remember(sourceId) {
         mutableStateOf(initialSeriesPresentation?.seriesEpisodeId)
     }
-    var restoreCatalogFocusAfterPlayback by remember(sourceId) { mutableStateOf(false) }
+    var restoreCatalogFallbackFocus by remember(sourceId) { mutableStateOf(false) }
+    var selectedSeriesFocusOrigin by remember(sourceId) { mutableStateOf<SeriesCatalogFocusOrigin?>(null) }
+    var restoreCatalogFocusTarget by remember(sourceId) { mutableStateOf<SeriesCatalogFocusTarget?>(null) }
+    var restoreSeasonFocusNumber by remember(sourceId) { mutableStateOf<Int?>(null) }
+    var restoreEpisodeFocusId by remember(sourceId) { mutableStateOf<String?>(null) }
+    var restoreDetailFocusAfterPlayback by remember(sourceId) { mutableStateOf(false) }
     val detailsBackOwner = remember(sourceId) { Any() }
     val sessionSeriesPlayback = onDemandPresentation.seriesPlayback.takeIf {
         onDemandPresentation.kind == OnDemandContentKind.SERIES &&
@@ -158,8 +170,10 @@ internal fun SeriesRoute(
     }
 
     fun closeSeriesLevel() {
+        restoreDetailFocusAfterPlayback = false
         when {
             selectedEpisodeId != null -> {
+                restoreEpisodeFocusId = selectedEpisodeId
                 selectedEpisodeId = null
                 runtime.onDemandPresentationSession.updateSeriesSelection(
                     seasonNumber = selectedSeasonNumber,
@@ -167,6 +181,7 @@ internal fun SeriesRoute(
                 )
             }
             selectedSeasonNumber != null -> {
+                restoreSeasonFocusNumber = selectedSeasonNumber
                 selectedSeasonNumber = null
                 selectedEpisodeId = null
                 runtime.onDemandPresentationSession.updateSeriesSelection(
@@ -179,7 +194,13 @@ internal fun SeriesRoute(
                     runtime.onDemandPresentationSession.clear()
                     onReturnToLibrary()
                 } else {
-                    restoreCatalogFocusAfterPlayback = true
+                    restoreCatalogFocusTarget = selectedSeries?.let { series ->
+                        selectedSeriesFocusOrigin?.let { origin ->
+                            SeriesCatalogFocusTarget(series.seriesId, origin)
+                        }
+                    }
+                    restoreCatalogFallbackFocus = restoreCatalogFocusTarget == null
+                    selectedSeriesFocusOrigin = null
                     selectedSeries = null
                     runtime.onDemandPresentationSession.showSeriesCatalog(sourceId)
                 }
@@ -229,8 +250,17 @@ internal fun SeriesRoute(
         }
     }
 
-    fun playEpisode(episode: SeriesEpisode, returnFocusToCatalog: Boolean) {
-        restoreCatalogFocusAfterPlayback = false
+    fun playEpisode(
+        episode: SeriesEpisode,
+        returnFocusToCatalog: Boolean,
+        catalogFocusTarget: SeriesCatalogFocusTarget? = null,
+        fromBeginning: Boolean = false,
+    ) {
+        restoreDetailFocusAfterPlayback = false
+        restoreCatalogFallbackFocus = false
+        if (returnFocusToCatalog) {
+            restoreCatalogFocusTarget = catalogFocusTarget
+        }
         runtime.playbackController.start(
             PlaybackRequest(
                 sourceId = sourceId,
@@ -242,7 +272,7 @@ internal fun SeriesRoute(
         )
         runtime.onDemandPresentationSession.showSeriesPlayback(
             sourceId = sourceId,
-            episode = episode,
+            episode = seriesPlaybackSnapshot(episode, fromBeginning),
             returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
             returnToCatalog = returnFocusToCatalog,
             selectedSeasonNumber = selectedSeasonNumber,
@@ -323,7 +353,12 @@ internal fun SeriesRoute(
                 current.itemId == target.seriesId
         selectedSeasonNumber = if (restoringCurrentSeries) current.seriesSeasonNumber else null
         selectedEpisodeId = if (restoringCurrentSeries) current.seriesEpisodeId else null
-        restoreCatalogFocusAfterPlayback = false
+        restoreCatalogFallbackFocus = false
+        restoreCatalogFocusTarget = null
+        selectedSeriesFocusOrigin = null
+        restoreSeasonFocusNumber = null
+        restoreEpisodeFocusId = null
+        restoreDetailFocusAfterPlayback = false
         selectedSeries = target
         if (!restoringCurrentSeries) {
             runtime.onDemandPresentationSession.showSeriesDetail(
@@ -433,7 +468,9 @@ internal fun SeriesRoute(
             onExit = {
                 runtime.onDemandPresentationSession.returnFromSeriesPlayback()
                 if (returnPlaybackToCatalog) {
-                    restoreCatalogFocusAfterPlayback = true
+                    restoreCatalogFallbackFocus = restoreCatalogFocusTarget == null
+                } else {
+                    restoreDetailFocusAfterPlayback = true
                 }
             },
             onFullscreenStateChanged = onFullscreenStateChanged,
@@ -464,24 +501,42 @@ internal fun SeriesRoute(
             selectedCategoryKey = categoryKey,
             favoritesOnly = favoritesOnly,
             selectedSeriesId = selectedSeries?.seriesId,
-            restoreFocusOnEntry = restoreCatalogFocusAfterPlayback,
-            onFocusRestored = { restoreCatalogFocusAfterPlayback = false },
+            restoreFocusTarget = restoreCatalogFocusTarget,
+            restoreFallbackFocusOnEntry = restoreCatalogFallbackFocus,
+            onFocusRestored = {
+                restoreCatalogFocusTarget = null
+                restoreCatalogFallbackFocus = false
+            },
             onQueryChanged = { query = it },
             onCategoryChanged = { categoryKey = it },
             onFavoritesChanged = { favoritesOnly = it },
             onRefresh = ::refresh,
-            onSeriesSelected = {
-                restoreCatalogFocusAfterPlayback = false
+            onSeriesSelected = { item, origin ->
+                restoreCatalogFallbackFocus = false
+                restoreCatalogFocusTarget = null
+                selectedSeriesFocusOrigin = origin
+                restoreSeasonFocusNumber = null
+                restoreEpisodeFocusId = null
+                restoreDetailFocusAfterPlayback = false
                 selectedSeasonNumber = null
                 selectedEpisodeId = null
-                selectedSeries = it
+                selectedSeries = item
                 runtime.onDemandPresentationSession.showSeriesDetail(
                     sourceId = sourceId,
-                    seriesId = it.seriesId,
+                    seriesId = item.seriesId,
                     returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
                 )
             },
-            onContinueEpisode = { episode -> playEpisode(episode, returnFocusToCatalog = true) },
+            onContinueEpisode = { episode ->
+                playEpisode(
+                    episode = episode,
+                    returnFocusToCatalog = true,
+                    catalogFocusTarget = SeriesCatalogFocusTarget(
+                        contentId = episode.episodeId,
+                        origin = SeriesCatalogFocusOrigin.CONTINUE_WATCHING,
+                    ),
+                )
+            },
             modifier = Modifier.weight(if (selectedSeries == null) 1f else 0.58f),
         )
         selectedSeries?.let { selected ->
@@ -493,13 +548,22 @@ internal fun SeriesRoute(
                 selectedSeasonNumber = selectedSeasonNumber,
                 selectedEpisodeId = selectedEpisodeId,
                 downloads = downloads,
-                focusBackOnEntry = returnToLibraryOnDetailBack,
+                focusBackOnEntry = restoreDetailFocusAfterPlayback || returnToLibraryOnDetailBack,
+                restoreSeasonFocusNumber = restoreSeasonFocusNumber,
+                restoreEpisodeFocusId = restoreEpisodeFocusId,
+                onSeasonFocusRestored = { restoreSeasonFocusNumber = null },
+                onEpisodeFocusRestored = { restoreEpisodeFocusId = null },
                 onSeasonSelected = {
+                    restoreSeasonFocusNumber = null
+                    restoreEpisodeFocusId = null
+                    restoreDetailFocusAfterPlayback = false
                     selectedSeasonNumber = it
                     selectedEpisodeId = null
                     runtime.onDemandPresentationSession.updateSeriesSelection(it, null)
                 },
                 onEpisodeSelected = {
+                    restoreEpisodeFocusId = null
+                    restoreDetailFocusAfterPlayback = false
                     selectedEpisodeId = it
                     runtime.onDemandPresentationSession.updateSeriesSelection(selectedSeasonNumber, it)
                 },
@@ -509,7 +573,12 @@ internal fun SeriesRoute(
                         featureRuntime.setFavorite(sourceId, selected.seriesId, favorite)
                     }
                 },
-                onPlay = { episode -> playEpisode(episode, returnFocusToCatalog = false) },
+                onPlay = { episode ->
+                    playEpisode(episode, returnFocusToCatalog = false, fromBeginning = false)
+                },
+                onPlayFromBeginning = { episode ->
+                    playEpisode(episode, returnFocusToCatalog = false, fromBeginning = true)
+                },
                 onDownload = ::downloadEpisode,
                 onPauseDownload = ::pauseDownload,
                 onResumeDownload = ::resumeDownload,
@@ -539,13 +608,14 @@ private fun SeriesCatalogPane(
     selectedCategoryKey: String?,
     favoritesOnly: Boolean,
     selectedSeriesId: String?,
-    restoreFocusOnEntry: Boolean,
+    restoreFocusTarget: SeriesCatalogFocusTarget?,
+    restoreFallbackFocusOnEntry: Boolean,
     onFocusRestored: () -> Unit,
     onQueryChanged: (String) -> Unit,
     onCategoryChanged: (String?) -> Unit,
     onFavoritesChanged: (Boolean) -> Unit,
     onRefresh: () -> Unit,
-    onSeriesSelected: (SeriesSummary) -> Unit,
+    onSeriesSelected: (SeriesSummary, SeriesCatalogFocusOrigin) -> Unit,
     onContinueEpisode: (SeriesEpisode) -> Unit,
     modifier: Modifier,
 ) {
@@ -554,13 +624,11 @@ private fun SeriesCatalogPane(
         ?.takeIf { key -> catalog.categories.any { it.providerCategoryKey == key } }
         ?: catalog.categories.firstOrNull()?.providerCategoryKey
 
-    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {
-        if (restoreFocusOnEntry) {
-            catalogReturnFocusRequester.requestFocus()
-        }
-        if (restoreFocusOnEntry) {
-            onFocusRestored()
-        }
+    LaunchedEffect(restoreFallbackFocusOnEntry, focusCategoryKey) {
+        if (!restoreFallbackFocusOnEntry) return@LaunchedEffect
+        withFrameNanos { }
+        catalogReturnFocusRequester.requestFocus()
+        onFocusRestored()
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -639,88 +707,173 @@ private fun SeriesCatalogPane(
             )
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(catalog.continueWatching, key = { it.episodeId }) { episode ->
-                    Surface(
-                        modifier = Modifier
-                            .width(210.dp)
-                            .clickable { onContinueEpisode(episode) },
-                        shape = RoundedCornerShape(12.dp),
-                        tonalElevation = 1.dp,
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                episode.seriesTitle,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                "S${episode.seasonNumber} · E${episode.episodeNumber} · ${episode.title}",
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
+                    SeriesContinueWatchingCard(
+                        episode = episode,
+                        restoreFocus = restoreFocusTarget == SeriesCatalogFocusTarget(
+                            contentId = episode.episodeId,
+                            origin = SeriesCatalogFocusOrigin.CONTINUE_WATCHING,
+                        ),
+                        onFocusRestored = onFocusRestored,
+                        onClick = { onContinueEpisode(episode) },
+                    )
                 }
             }
         }
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 140.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(series, key = { it.seriesId }) { item ->
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSeriesSelected(item) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (selectedSeriesId == item.seriesId) {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.background
-                    },
-                ) {
-                    Row(
-                        modifier = Modifier.padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RemotePoster(
-                            url = item.posterUrl,
-                            title = item.name,
-                            modifier = Modifier
-                                .width(64.dp)
-                                .aspectRatio(2f / 3f),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(item.name, fontWeight = FontWeight.SemiBold)
-                            item.rating?.let { rating ->
-                                Text(
-                                    "Rating ${"%.1f".format(rating)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            item.description?.takeIf(String::isNotBlank)?.let { description ->
-                                Text(
-                                    text = description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            if (item.isFavorite) {
-                                Text("Favorite", style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
+            gridItems(series, key = { it.seriesId }) { item ->
+                SeriesCatalogCard(
+                    item = item,
+                    selected = selectedSeriesId == item.seriesId,
+                    restoreFocus = restoreFocusTarget == SeriesCatalogFocusTarget(
+                        contentId = item.seriesId,
+                        origin = SeriesCatalogFocusOrigin.GRID,
+                    ),
+                    onFocusRestored = onFocusRestored,
+                    onClick = { onSeriesSelected(item, SeriesCatalogFocusOrigin.GRID) },
+                )
             }
         }
     }
+}
+
+private enum class SeriesCatalogFocusOrigin {
+    GRID,
+    CONTINUE_WATCHING,
+}
+
+private data class SeriesCatalogFocusTarget(
+    val contentId: String,
+    val origin: SeriesCatalogFocusOrigin,
+)
+
+@Composable
+private fun SeriesCatalogCard(
+    item: SeriesSummary,
+    selected: Boolean,
+    restoreFocus: Boolean,
+    onFocusRestored: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val focusRequester = remember(item.seriesId) { FocusRequester() }
+    var focused by remember(item.seriesId) { mutableStateOf(false) }
+
+    LaunchedEffect(restoreFocus, item.seriesId) {
+        if (!restoreFocus) return@LaunchedEffect
+        withFrameNanos { }
+        focusRequester.requestFocus()
+        onFocusRestored()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(4.dp)
+            .clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        RemotePoster(
+            url = item.posterUrl,
+            title = item.name,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f),
+        )
+        Text(
+            item.name,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
+        item.rating?.let { rating ->
+            Text(
+                "Rating ${"%.1f".format(rating)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SeriesContinueWatchingCard(
+    episode: SeriesEpisode,
+    restoreFocus: Boolean,
+    onFocusRestored: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val focusRequester = remember(episode.episodeId) { FocusRequester() }
+    var focused by remember(episode.episodeId) { mutableStateOf(false) }
+
+    LaunchedEffect(restoreFocus, episode.episodeId) {
+        if (!restoreFocus) return@LaunchedEffect
+        withFrameNanos { }
+        focusRequester.requestFocus()
+        onFocusRestored()
+    }
+
+    Surface(
+        modifier = Modifier
+            .width(210.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 1.dp,
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Text(
+                episode.seriesTitle,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "S${episode.seasonNumber} · E${episode.episodeNumber} · ${episode.title}",
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "Continue",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+internal fun seriesPlaybackSnapshot(
+    episode: SeriesEpisode,
+    fromBeginning: Boolean,
+): SeriesEpisode = if (fromBeginning) {
+    episode.copy(
+        positionMs = null,
+        progressCompleted = false,
+        progressUpdatedAtEpochMillis = null,
+    )
+} else {
+    episode
 }
 
 @OptIn(UnstableApi::class)
