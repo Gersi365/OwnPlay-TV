@@ -4,6 +4,7 @@ import android.graphics.Color as AndroidColor
 import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -69,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -178,6 +180,8 @@ internal fun VodRoute(
     var detailsError by remember(sourceId) { mutableStateOf<SourceError?>(null) }
     var restoreDetailFocusAfterPlayback by remember(sourceId) { mutableStateOf(false) }
     var restoreCategoryFocusAfterDetailBack by remember(sourceId) { mutableStateOf(false) }
+    var selectedMovieFocusOrigin by remember(sourceId) { mutableStateOf<MovieFocusOrigin?>(null) }
+    var restoreMovieFocusTarget by remember(sourceId) { mutableStateOf<MovieFocusTarget?>(null) }
     val detailsBackOwner = remember(sourceId) { Any() }
     val sessionMoviePlayback = onDemandPresentation.moviePlayback.takeIf {
         onDemandPresentation.kind == OnDemandContentKind.MOVIE &&
@@ -191,7 +195,11 @@ internal fun VodRoute(
             onReturnToLibrary()
             return
         }
-        restoreCategoryFocusAfterDetailBack = true
+        restoreCategoryFocusAfterDetailBack = false
+        restoreMovieFocusTarget = selectedMovie?.let { movie ->
+            selectedMovieFocusOrigin?.let { origin -> MovieFocusTarget(movie.movieId, origin) }
+        }
+        selectedMovieFocusOrigin = null
         selectedMovie = null
         runtime.onDemandPresentationSession.showMovieCatalog(sourceId)
     }
@@ -301,6 +309,22 @@ internal fun VodRoute(
         }
     }
 
+    fun startMoviePlayback(target: VodMovie, fromBeginning: Boolean) {
+        restoreDetailFocusAfterPlayback = false
+        runtime.playbackController.start(
+            PlaybackRequest(
+                sourceId = sourceId,
+                channelId = target.movieId,
+                mediaKind = PlaybackMediaKind.MOVIE,
+            ),
+        )
+        runtime.onDemandPresentationSession.showMoviePlayback(
+            sourceId = sourceId,
+            movie = moviePlaybackSnapshot(target, fromBeginning),
+            returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
+        )
+    }
+
     fun refresh() {
         scope.launch {
             loading = true
@@ -346,6 +370,8 @@ internal fun VodRoute(
         favoritesOnly = false
         restoreDetailFocusAfterPlayback = false
         restoreCategoryFocusAfterDetailBack = false
+        selectedMovieFocusOrigin = null
+        restoreMovieFocusTarget = null
         selectedMovie = target
         runtime.onDemandPresentationSession.showMovieDetail(
             sourceId = sourceId,
@@ -477,16 +503,20 @@ internal fun VodRoute(
             onFavoritesChanged = { favoritesOnly = it },
             onSortChanged = { sortOrder = it },
             onRefresh = ::refresh,
-            onMovieSelected = {
+            onMovieSelected = { movie, origin ->
                 restoreDetailFocusAfterPlayback = false
                 restoreCategoryFocusAfterDetailBack = false
-                selectedMovie = it
+                restoreMovieFocusTarget = null
+                selectedMovieFocusOrigin = origin
+                selectedMovie = movie
                 runtime.onDemandPresentationSession.showMovieDetail(
                     sourceId = sourceId,
-                    movieId = it.movieId,
+                    movieId = movie.movieId,
                     returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
                 )
             },
+            restoreFocusTarget = restoreMovieFocusTarget,
+            onMovieFocusRestored = { restoreMovieFocusTarget = null },
             showCategoryStrip = false,
             selectedCategoryKey = selectedCategoryKey,
             onCategorySelected = { selectedCategoryKey = it },
@@ -508,20 +538,9 @@ internal fun VodRoute(
                 onRetryDownload = ::retryDownload,
                 onRemoveDownload = ::removeDownload,
                 onClearProgress = { clearMovieProgress(movie) },
-                onPlay = { target ->
-                    restoreDetailFocusAfterPlayback = false
-                    runtime.playbackController.start(
-                        PlaybackRequest(
-                            sourceId = sourceId,
-                            channelId = target.movieId,
-                            mediaKind = PlaybackMediaKind.MOVIE,
-                        ),
-                    )
-                    runtime.onDemandPresentationSession.showMoviePlayback(
-                        sourceId = sourceId,
-                        movie = target,
-                        returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-                    )
+                onPlay = { target -> startMoviePlayback(target, fromBeginning = false) },
+                onPlayFromBeginning = { target ->
+                    startMoviePlayback(target, fromBeginning = true)
                 },
                 modifier = Modifier
                     .weight(0.37f)
@@ -545,7 +564,9 @@ private fun MoviesCatalogContent(
     onFavoritesChanged: (Boolean) -> Unit,
     onSortChanged: (VodSortOrder) -> Unit,
     onRefresh: () -> Unit,
-    onMovieSelected: (VodMovie) -> Unit,
+    onMovieSelected: (VodMovie, MovieFocusOrigin) -> Unit,
+    restoreFocusTarget: MovieFocusTarget?,
+    onMovieFocusRestored: () -> Unit,
     showCategoryStrip: Boolean,
     selectedCategoryKey: String?,
     onCategorySelected: (String?) -> Unit,
@@ -671,7 +692,15 @@ private fun MoviesCatalogContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(catalog.continueWatching, key = { "continue-${it.movieId}" }) { movie ->
-                    ContinueWatchingCard(movie = movie, onClick = { onMovieSelected(movie) })
+                    ContinueWatchingCard(
+                        movie = movie,
+                        restoreFocus = restoreFocusTarget == MovieFocusTarget(
+                            movieId = movie.movieId,
+                            origin = MovieFocusOrigin.CONTINUE_WATCHING,
+                        ),
+                        onFocusRestored = onMovieFocusRestored,
+                        onClick = { onMovieSelected(movie, MovieFocusOrigin.CONTINUE_WATCHING) },
+                    )
                 }
             }
         }
@@ -705,7 +734,15 @@ private fun MoviesCatalogContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(movies, key = { it.movieId }) { movie ->
-                    MovieCard(movie = movie, onClick = { onMovieSelected(movie) })
+                    MovieCard(
+                        movie = movie,
+                        restoreFocus = restoreFocusTarget == MovieFocusTarget(
+                            movieId = movie.movieId,
+                            origin = MovieFocusOrigin.GRID,
+                        ),
+                        onFocusRestored = onMovieFocusRestored,
+                        onClick = { onMovieSelected(movie, MovieFocusOrigin.GRID) },
+                    )
                 }
             }
         }
@@ -805,11 +842,31 @@ private fun MovieCategoryRow(
 @Composable
 private fun MovieCard(
     movie: VodMovie,
+    restoreFocus: Boolean,
+    onFocusRestored: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val focusRequester = remember(movie.movieId) { FocusRequester() }
+    var focused by remember(movie.movieId) { mutableStateOf(false) }
+
+    LaunchedEffect(restoreFocus, movie.movieId) {
+        if (!restoreFocus) return@LaunchedEffect
+        withFrameNanos { }
+        focusRequester.requestFocus()
+        onFocusRestored()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(4.dp)
             .clickable(onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
@@ -876,11 +933,30 @@ private fun MovieCard(
 @Composable
 private fun ContinueWatchingCard(
     movie: VodMovie,
+    restoreFocus: Boolean,
+    onFocusRestored: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val focusRequester = remember(movie.movieId) { FocusRequester() }
+    var focused by remember(movie.movieId) { mutableStateOf(false) }
+
+    LaunchedEffect(restoreFocus, movie.movieId) {
+        if (!restoreFocus) return@LaunchedEffect
+        withFrameNanos { }
+        focusRequester.requestFocus()
+        onFocusRestored()
+    }
+
     Surface(
         modifier = Modifier
             .width(220.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                width = 2.dp,
+                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(12.dp),
+            )
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         tonalElevation = 1.dp,
@@ -912,6 +988,29 @@ private fun ContinueWatchingCard(
             }
         }
     }
+}
+
+private enum class MovieFocusOrigin {
+    GRID,
+    CONTINUE_WATCHING,
+}
+
+private data class MovieFocusTarget(
+    val movieId: String,
+    val origin: MovieFocusOrigin,
+)
+
+internal fun moviePlaybackSnapshot(
+    movie: VodMovie,
+    fromBeginning: Boolean,
+): VodMovie = if (fromBeginning) {
+    movie.copy(
+        positionMs = null,
+        progressCompleted = false,
+        progressUpdatedAtEpochMillis = null,
+    )
+} else {
+    movie
 }
 
 @OptIn(UnstableApi::class)

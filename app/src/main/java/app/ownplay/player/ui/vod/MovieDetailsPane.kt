@@ -68,6 +68,7 @@ internal fun MovieDetailsPane(
     onRemoveDownload: (OfflineDownload) -> Unit,
     onClearProgress: () -> Unit,
     onPlay: (VodMovie) -> Unit,
+    onPlayFromBeginning: (VodMovie) -> Unit,
     modifier: Modifier,
 ) {
     val detailPrimaryFocusRequester = remember(movie.movieId) { FocusRequester() }
@@ -164,7 +165,7 @@ internal fun MovieDetailsPane(
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text(if (movie.resumeAvailable) "Resume" else "Play")
+                    Text(if (movie.resumeAvailable) "Continue" else "Play")
                 }
                 FilledTonalButton(
                     onClick = { onFavoriteChanged(!movie.isFavorite) },
@@ -174,6 +175,18 @@ internal fun MovieDetailsPane(
                         if (movie.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = null,
                     )
+                }
+            }
+
+            if (movie.resumeAvailable) {
+                FilledTonalButton(
+                    onClick = { onPlayFromBeginning(movie) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Play from beginning")
                 }
             }
 
