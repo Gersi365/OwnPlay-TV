@@ -1,0 +1,334 @@
+name: Apply OwnPlay TV Series contract hardening
+
+on:
+  push:
+    branches:
+      - agent/series-tv-contract-hardening-no-apk
+    paths:
+      - .github/workflows/apply-series-tv-contract-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact Series phase branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/series-tv-contract-hardening-no-apk
+          fetch-depth: 0
+
+      - name: Verify authorized base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "f6847e93ffbef29365450c0a6fc59b23cbf97335"
+          git diff --quiet f6847e93ffbef29365450c0a6fc59b23cbf97335 HEAD^ -- app OwnPlay_TV_SOURCE.md OwnPlay_TV_UI_INTERACTION_CONTRACT.md OwnPlay_TV_ENGINEERING_WORKFLOW.md
+
+      - name: Harden Series TV contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: Path, old: str, new: str, label: str) -> None:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          route = Path('app/src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt')
+          text = route.read_text(encoding='utf-8')
+          text = text.replace(
+              'import androidx.compose.foundation.clickable\n',
+              'import androidx.compose.foundation.border\nimport androidx.compose.foundation.clickable\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.foundation.lazy.items\n',
+              'import androidx.compose.foundation.lazy.items\nimport androidx.compose.foundation.lazy.grid.GridCells\nimport androidx.compose.foundation.lazy.grid.LazyVerticalGrid\nimport androidx.compose.foundation.lazy.grid.items as gridItems\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.runtime.setValue\n',
+              'import androidx.compose.runtime.setValue\nimport androidx.compose.runtime.withFrameNanos\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.ui.focus.focusRequester\n',
+              'import androidx.compose.ui.focus.focusRequester\nimport androidx.compose.ui.focus.onFocusChanged\nimport androidx.compose.ui.graphics.Color\n',
+              1,
+          )
+
+          old = '''    var restoreCatalogFocusAfterPlayback by remember(sourceId) { mutableStateOf(false) }\n'''
+          new = '''    var restoreCatalogFallbackFocus by remember(sourceId) { mutableStateOf(false) }\n    var selectedSeriesFocusOrigin by remember(sourceId) { mutableStateOf<SeriesCatalogFocusOrigin?>(null) }\n    var restoreCatalogFocusTarget by remember(sourceId) { mutableStateOf<SeriesCatalogFocusTarget?>(null) }\n    var restoreSeasonFocusNumber by remember(sourceId) { mutableStateOf<Int?>(null) }\n    var restoreEpisodeFocusId by remember(sourceId) { mutableStateOf<String?>(null) }\n    var restoreDetailFocusAfterPlayback by remember(sourceId) { mutableStateOf(false) }\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series focus state block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    fun closeSeriesLevel() {\n        when {\n            selectedEpisodeId != null -> {\n                selectedEpisodeId = null\n                runtime.onDemandPresentationSession.updateSeriesSelection(\n                    seasonNumber = selectedSeasonNumber,\n                    episodeId = null,\n                )\n            }\n            selectedSeasonNumber != null -> {\n                selectedSeasonNumber = null\n                selectedEpisodeId = null\n                runtime.onDemandPresentationSession.updateSeriesSelection(\n                    seasonNumber = null,\n                    episodeId = null,\n                )\n            }\n            selectedSeries != null -> {\n                if (returnToLibraryOnDetailBack) {\n                    runtime.onDemandPresentationSession.clear()\n                    onReturnToLibrary()\n                } else {\n                    restoreCatalogFocusAfterPlayback = true\n                    selectedSeries = null\n                    runtime.onDemandPresentationSession.showSeriesCatalog(sourceId)\n                }\n            }\n            returnToLibraryOnDetailBack -> {\n                runtime.onDemandPresentationSession.clear()\n                onReturnToLibrary()\n            }\n        }\n    }\n'''
+          new = '''    fun closeSeriesLevel() {\n        restoreDetailFocusAfterPlayback = false\n        when {\n            selectedEpisodeId != null -> {\n                restoreEpisodeFocusId = selectedEpisodeId\n                selectedEpisodeId = null\n                runtime.onDemandPresentationSession.updateSeriesSelection(\n                    seasonNumber = selectedSeasonNumber,\n                    episodeId = null,\n                )\n            }\n            selectedSeasonNumber != null -> {\n                restoreSeasonFocusNumber = selectedSeasonNumber\n                selectedSeasonNumber = null\n                selectedEpisodeId = null\n                runtime.onDemandPresentationSession.updateSeriesSelection(\n                    seasonNumber = null,\n                    episodeId = null,\n                )\n            }\n            selectedSeries != null -> {\n                if (returnToLibraryOnDetailBack) {\n                    runtime.onDemandPresentationSession.clear()\n                    onReturnToLibrary()\n                } else {\n                    restoreCatalogFocusTarget = selectedSeries?.let { series ->\n                        selectedSeriesFocusOrigin?.let { origin ->\n                            SeriesCatalogFocusTarget(series.seriesId, origin)\n                        }\n                    }\n                    restoreCatalogFallbackFocus = restoreCatalogFocusTarget == null\n                    selectedSeriesFocusOrigin = null\n                    selectedSeries = null\n                    runtime.onDemandPresentationSession.showSeriesCatalog(sourceId)\n                }\n            }\n            returnToLibraryOnDetailBack -> {\n                runtime.onDemandPresentationSession.clear()\n                onReturnToLibrary()\n            }\n        }\n    }\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series Back block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    fun playEpisode(episode: SeriesEpisode, returnFocusToCatalog: Boolean) {\n        restoreCatalogFocusAfterPlayback = false\n        runtime.playbackController.start(\n            PlaybackRequest(\n                sourceId = sourceId,\n                channelId = episode.episodeId,\n                mediaKind = PlaybackMediaKind.SERIES_EPISODE,\n                providerStreamId = episode.providerEpisodeId,\n                containerExtension = episode.containerExtension,\n            ),\n        )\n        runtime.onDemandPresentationSession.showSeriesPlayback(\n            sourceId = sourceId,\n            episode = episode,\n            returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,\n            returnToCatalog = returnFocusToCatalog,\n            selectedSeasonNumber = selectedSeasonNumber,\n            selectedEpisodeId = selectedEpisodeId,\n        )\n    }\n'''
+          new = '''    fun playEpisode(\n        episode: SeriesEpisode,\n        returnFocusToCatalog: Boolean,\n        catalogFocusTarget: SeriesCatalogFocusTarget? = null,\n        fromBeginning: Boolean = false,\n    ) {\n        restoreDetailFocusAfterPlayback = false\n        restoreCatalogFallbackFocus = false\n        if (returnFocusToCatalog) {\n            restoreCatalogFocusTarget = catalogFocusTarget\n        }\n        runtime.playbackController.start(\n            PlaybackRequest(\n                sourceId = sourceId,\n                channelId = episode.episodeId,\n                mediaKind = PlaybackMediaKind.SERIES_EPISODE,\n                providerStreamId = episode.providerEpisodeId,\n                containerExtension = episode.containerExtension,\n            ),\n        )\n        runtime.onDemandPresentationSession.showSeriesPlayback(\n            sourceId = sourceId,\n            episode = seriesPlaybackSnapshot(episode, fromBeginning),\n            returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,\n            returnToCatalog = returnFocusToCatalog,\n            selectedSeasonNumber = selectedSeasonNumber,\n            selectedEpisodeId = selectedEpisodeId,\n        )\n    }\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series playback helper block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''        restoreCatalogFocusAfterPlayback = false\n        selectedSeries = target\n'''
+          new = '''        restoreCatalogFallbackFocus = false\n        restoreCatalogFocusTarget = null\n        selectedSeriesFocusOrigin = null\n        restoreSeasonFocusNumber = null\n        restoreEpisodeFocusId = null\n        restoreDetailFocusAfterPlayback = false\n        selectedSeries = target\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Requested Series focus reset block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''            onExit = {\n                runtime.onDemandPresentationSession.returnFromSeriesPlayback()\n                if (returnPlaybackToCatalog) {\n                    restoreCatalogFocusAfterPlayback = true\n                }\n            },\n'''
+          new = '''            onExit = {\n                runtime.onDemandPresentationSession.returnFromSeriesPlayback()\n                if (returnPlaybackToCatalog) {\n                    restoreCatalogFallbackFocus = restoreCatalogFocusTarget == null\n                } else {\n                    restoreDetailFocusAfterPlayback = true\n                }\n            },\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series playback exit block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''            selectedSeriesId = selectedSeries?.seriesId,\n            restoreFocusOnEntry = restoreCatalogFocusAfterPlayback,\n            onFocusRestored = { restoreCatalogFocusAfterPlayback = false },\n'''
+          new = '''            selectedSeriesId = selectedSeries?.seriesId,\n            restoreFocusTarget = restoreCatalogFocusTarget,\n            restoreFallbackFocusOnEntry = restoreCatalogFallbackFocus,\n            onFocusRestored = {\n                restoreCatalogFocusTarget = null\n                restoreCatalogFallbackFocus = false\n            },\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series catalog focus params mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''            onSeriesSelected = {\n                restoreCatalogFocusAfterPlayback = false\n                selectedSeasonNumber = null\n                selectedEpisodeId = null\n                selectedSeries = it\n                runtime.onDemandPresentationSession.showSeriesDetail(\n                    sourceId = sourceId,\n                    seriesId = it.seriesId,\n                    returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,\n                )\n            },\n            onContinueEpisode = { episode -> playEpisode(episode, returnFocusToCatalog = true) },\n'''
+          new = '''            onSeriesSelected = { item, origin ->\n                restoreCatalogFallbackFocus = false\n                restoreCatalogFocusTarget = null\n                selectedSeriesFocusOrigin = origin\n                restoreSeasonFocusNumber = null\n                restoreEpisodeFocusId = null\n                restoreDetailFocusAfterPlayback = false\n                selectedSeasonNumber = null\n                selectedEpisodeId = null\n                selectedSeries = item\n                runtime.onDemandPresentationSession.showSeriesDetail(\n                    sourceId = sourceId,\n                    seriesId = item.seriesId,\n                    returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,\n                )\n            },\n            onContinueEpisode = { episode ->\n                playEpisode(\n                    episode = episode,\n                    returnFocusToCatalog = true,\n                    catalogFocusTarget = SeriesCatalogFocusTarget(\n                        contentId = episode.episodeId,\n                        origin = SeriesCatalogFocusOrigin.CONTINUE_WATCHING,\n                    ),\n                )\n            },\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series catalog callbacks mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                downloads = downloads,\n                focusBackOnEntry = returnToLibraryOnDetailBack,\n                onSeasonSelected = {\n                    selectedSeasonNumber = it\n                    selectedEpisodeId = null\n                    runtime.onDemandPresentationSession.updateSeriesSelection(it, null)\n                },\n                onEpisodeSelected = {\n                    selectedEpisodeId = it\n                    runtime.onDemandPresentationSession.updateSeriesSelection(selectedSeasonNumber, it)\n                },\n'''
+          new = '''                downloads = downloads,\n                focusBackOnEntry = restoreDetailFocusAfterPlayback || returnToLibraryOnDetailBack,\n                restoreSeasonFocusNumber = restoreSeasonFocusNumber,\n                restoreEpisodeFocusId = restoreEpisodeFocusId,\n                onSeasonFocusRestored = { restoreSeasonFocusNumber = null },\n                onEpisodeFocusRestored = { restoreEpisodeFocusId = null },\n                onSeasonSelected = {\n                    restoreSeasonFocusNumber = null\n                    restoreEpisodeFocusId = null\n                    restoreDetailFocusAfterPlayback = false\n                    selectedSeasonNumber = it\n                    selectedEpisodeId = null\n                    runtime.onDemandPresentationSession.updateSeriesSelection(it, null)\n                },\n                onEpisodeSelected = {\n                    restoreEpisodeFocusId = null\n                    restoreDetailFocusAfterPlayback = false\n                    selectedEpisodeId = it\n                    runtime.onDemandPresentationSession.updateSeriesSelection(selectedSeasonNumber, it)\n                },\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series details focus callback block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                onPlay = { episode -> playEpisode(episode, returnFocusToCatalog = false) },\n                onDownload = ::downloadEpisode,\n'''
+          new = '''                onPlay = { episode ->\n                    playEpisode(episode, returnFocusToCatalog = false, fromBeginning = false)\n                },\n                onPlayFromBeginning = { episode ->\n                    playEpisode(episode, returnFocusToCatalog = false, fromBeginning = true)\n                },\n                onDownload = ::downloadEpisode,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series detail playback callback block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    selectedSeriesId: String?,\n    restoreFocusOnEntry: Boolean,\n    onFocusRestored: () -> Unit,\n'''
+          new = '''    selectedSeriesId: String?,\n    restoreFocusTarget: SeriesCatalogFocusTarget?,\n    restoreFallbackFocusOnEntry: Boolean,\n    onFocusRestored: () -> Unit,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('SeriesCatalogPane focus signature mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    onRefresh: () -> Unit,\n    onSeriesSelected: (SeriesSummary) -> Unit,\n    onContinueEpisode: (SeriesEpisode) -> Unit,\n'''
+          new = '''    onRefresh: () -> Unit,\n    onSeriesSelected: (SeriesSummary, SeriesCatalogFocusOrigin) -> Unit,\n    onContinueEpisode: (SeriesEpisode) -> Unit,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('SeriesCatalogPane selection signature mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {\n        if (restoreFocusOnEntry) {\n            catalogReturnFocusRequester.requestFocus()\n        }\n        if (restoreFocusOnEntry) {\n            onFocusRestored()\n        }\n    }\n'''
+          new = '''    LaunchedEffect(restoreFallbackFocusOnEntry, focusCategoryKey) {\n        if (!restoreFallbackFocusOnEntry) return@LaunchedEffect\n        withFrameNanos { }\n        catalogReturnFocusRequester.requestFocus()\n        onFocusRestored()\n    }\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series catalog fallback focus effect mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {\n                items(catalog.continueWatching, key = { it.episodeId }) { episode ->\n                    Surface(\n                        modifier = Modifier\n                            .width(210.dp)\n                            .clickable { onContinueEpisode(episode) },\n                        shape = RoundedCornerShape(12.dp),\n                        tonalElevation = 1.dp,\n                    ) {\n                        Column(modifier = Modifier.padding(10.dp)) {\n                            Text(\n                                episode.seriesTitle,\n                                fontWeight = FontWeight.SemiBold,\n                                maxLines = 1,\n                                overflow = TextOverflow.Ellipsis,\n                            )\n                            Text(\n                                "S${episode.seasonNumber} · E${episode.episodeNumber} · ${episode.title}",\n                                style = MaterialTheme.typography.bodySmall,\n                                maxLines = 2,\n                                overflow = TextOverflow.Ellipsis,\n                            )\n                        }\n                    }\n                }\n            }\n'''
+          new = '''            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {\n                items(catalog.continueWatching, key = { it.episodeId }) { episode ->\n                    SeriesContinueWatchingCard(\n                        episode = episode,\n                        restoreFocus = restoreFocusTarget == SeriesCatalogFocusTarget(\n                            contentId = episode.episodeId,\n                            origin = SeriesCatalogFocusOrigin.CONTINUE_WATCHING,\n                        ),\n                        onFocusRestored = onFocusRestored,\n                        onClick = { onContinueEpisode(episode) },\n                    )\n                }\n            }\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series Continue Watching block mismatch')
+          text = text.replace(old, new, 1)
+
+          start = text.index('        LazyColumn(\n            modifier = Modifier\n                .fillMaxWidth()\n                .weight(1f),', text.index('private fun SeriesCatalogPane'))
+          end = text.index('\n    }\n}\n\n@OptIn(UnstableApi::class)', start)
+          replacement = '''        LazyVerticalGrid(\n            columns = GridCells.Adaptive(minSize = 140.dp),\n            modifier = Modifier\n                .fillMaxWidth()\n                .weight(1f),\n            horizontalArrangement = Arrangement.spacedBy(8.dp),\n            verticalArrangement = Arrangement.spacedBy(8.dp),\n        ) {\n            gridItems(series, key = { it.seriesId }) { item ->\n                SeriesCatalogCard(\n                    item = item,\n                    selected = selectedSeriesId == item.seriesId,\n                    restoreFocus = restoreFocusTarget == SeriesCatalogFocusTarget(\n                        contentId = item.seriesId,\n                        origin = SeriesCatalogFocusOrigin.GRID,\n                    ),\n                    onFocusRestored = onFocusRestored,\n                    onClick = { onSeriesSelected(item, SeriesCatalogFocusOrigin.GRID) },\n                )\n            }\n        }'''
+          text = text[:start] + replacement + text[end:]
+
+          insert_marker = '\n@OptIn(UnstableApi::class)\n@Composable\nprivate fun SeriesPlaybackScreen('
+          if text.count(insert_marker) != 1:
+              raise RuntimeError('Series card insertion marker mismatch')
+          cards = '''\nprivate enum class SeriesCatalogFocusOrigin {\n    GRID,\n    CONTINUE_WATCHING,\n}\n\nprivate data class SeriesCatalogFocusTarget(\n    val contentId: String,\n    val origin: SeriesCatalogFocusOrigin,\n)\n\n@Composable\nprivate fun SeriesCatalogCard(\n    item: SeriesSummary,\n    selected: Boolean,\n    restoreFocus: Boolean,\n    onFocusRestored: () -> Unit,\n    onClick: () -> Unit,\n) {\n    val focusRequester = remember(item.seriesId) { FocusRequester() }\n    var focused by remember(item.seriesId) { mutableStateOf(false) }\n\n    LaunchedEffect(restoreFocus, item.seriesId) {\n        if (!restoreFocus) return@LaunchedEffect\n        withFrameNanos { }\n        focusRequester.requestFocus()\n        onFocusRestored()\n    }\n\n    Column(\n        modifier = Modifier\n            .fillMaxWidth()\n            .focusRequester(focusRequester)\n            .onFocusChanged { focused = it.isFocused }\n            .border(\n                width = 2.dp,\n                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,\n                shape = RoundedCornerShape(8.dp),\n            )\n            .padding(4.dp)\n            .clickable(onClick = onClick),\n        verticalArrangement = Arrangement.spacedBy(5.dp),\n    ) {\n        RemotePoster(\n            url = item.posterUrl,\n            title = item.name,\n            modifier = Modifier\n                .fillMaxWidth()\n                .aspectRatio(2f / 3f),\n        )\n        Text(\n            item.name,\n            style = MaterialTheme.typography.bodySmall,\n            fontWeight = FontWeight.SemiBold,\n            maxLines = 2,\n            overflow = TextOverflow.Ellipsis,\n            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,\n        )\n        item.rating?.let { rating ->\n            Text(\n                "Rating ${"%.1f".format(rating)}",\n                style = MaterialTheme.typography.labelSmall,\n                color = MaterialTheme.colorScheme.onSurfaceVariant,\n            )\n        }\n    }\n}\n\n@Composable\nprivate fun SeriesContinueWatchingCard(\n    episode: SeriesEpisode,\n    restoreFocus: Boolean,\n    onFocusRestored: () -> Unit,\n    onClick: () -> Unit,\n) {\n    val focusRequester = remember(episode.episodeId) { FocusRequester() }\n    var focused by remember(episode.episodeId) { mutableStateOf(false) }\n\n    LaunchedEffect(restoreFocus, episode.episodeId) {\n        if (!restoreFocus) return@LaunchedEffect\n        withFrameNanos { }\n        focusRequester.requestFocus()\n        onFocusRestored()\n    }\n\n    Surface(\n        modifier = Modifier\n            .width(210.dp)\n            .focusRequester(focusRequester)\n            .onFocusChanged { focused = it.isFocused }\n            .border(\n                width = 2.dp,\n                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,\n                shape = RoundedCornerShape(12.dp),\n            )\n            .clickable(onClick = onClick),\n        shape = RoundedCornerShape(12.dp),\n        tonalElevation = 1.dp,\n    ) {\n        Column(modifier = Modifier.padding(10.dp)) {\n            Text(\n                episode.seriesTitle,\n                fontWeight = FontWeight.SemiBold,\n                maxLines = 1,\n                overflow = TextOverflow.Ellipsis,\n            )\n            Text(\n                "S${episode.seasonNumber} · E${episode.episodeNumber} · ${episode.title}",\n                style = MaterialTheme.typography.bodySmall,\n                maxLines = 2,\n                overflow = TextOverflow.Ellipsis,\n            )\n            Text(\n                "Continue",\n                style = MaterialTheme.typography.labelSmall,\n                color = MaterialTheme.colorScheme.primary,\n            )\n        }\n    }\n}\n\ninternal fun seriesPlaybackSnapshot(\n    episode: SeriesEpisode,\n    fromBeginning: Boolean,\n): SeriesEpisode = if (fromBeginning) {\n    episode.copy(\n        positionMs = null,\n        progressCompleted = false,\n        progressUpdatedAtEpochMillis = null,\n    )\n} else {\n    episode\n}\n'''
+          text = text.replace(insert_marker, cards + insert_marker, 1)
+          route.write_text(text, encoding='utf-8')
+
+          details = Path('app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt')
+          text = details.read_text(encoding='utf-8')
+          text = text.replace(
+              'import androidx.compose.foundation.clickable\n',
+              'import androidx.compose.foundation.border\nimport androidx.compose.foundation.clickable\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.runtime.Composable\n',
+              'import androidx.compose.runtime.Composable\nimport androidx.compose.runtime.getValue\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.runtime.remember\n',
+              'import androidx.compose.runtime.mutableStateOf\nimport androidx.compose.runtime.remember\nimport androidx.compose.runtime.setValue\n',
+              1,
+          )
+          text = text.replace(
+              'import androidx.compose.ui.focus.focusRequester\n',
+              'import androidx.compose.ui.focus.focusRequester\nimport androidx.compose.ui.focus.onFocusChanged\nimport androidx.compose.ui.graphics.Color\n',
+              1,
+          )
+
+          old = '''    downloads: List<OfflineDownload>,\n    focusBackOnEntry: Boolean,\n    onSeasonSelected: (Int) -> Unit,\n    onEpisodeSelected: (String) -> Unit,\n'''
+          new = '''    downloads: List<OfflineDownload>,\n    focusBackOnEntry: Boolean,\n    restoreSeasonFocusNumber: Int?,\n    restoreEpisodeFocusId: String?,\n    onSeasonFocusRestored: () -> Unit,\n    onEpisodeFocusRestored: () -> Unit,\n    onSeasonSelected: (Int) -> Unit,\n    onEpisodeSelected: (String) -> Unit,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('SeriesDetailsPane focus signature mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    onFavoriteChanged: (Boolean) -> Unit,\n    onPlay: (SeriesEpisode) -> Unit,\n    onDownload: (SeriesEpisode) -> Unit,\n'''
+          new = '''    onFavoriteChanged: (Boolean) -> Unit,\n    onPlay: (SeriesEpisode) -> Unit,\n    onPlayFromBeginning: (SeriesEpisode) -> Unit,\n    onDownload: (SeriesEpisode) -> Unit,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('SeriesDetailsPane playback signature mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    LaunchedEffect(\n        focusBackOnEntry,\n        selected.seriesId,\n        selectedSeasonNumber,\n        selectedEpisodeId,\n        details?.seasons?.size,\n        selectedSeason?.episodes?.size,\n    ) {\n        val primaryTargetAvailable = when {\n            selectedEpisode != null -> true\n            selectedSeason != null -> selectedSeason.episodes.isNotEmpty()\n            details != null -> true\n            else -> false\n        }\n        if (!primaryTargetAvailable) return@LaunchedEffect\n        withFrameNanos { }\n        primaryActionFocusRequester.requestFocus()\n    }\n'''
+          new = '''    LaunchedEffect(\n        focusBackOnEntry,\n        selected.seriesId,\n        selectedSeasonNumber,\n        selectedEpisodeId,\n        restoreSeasonFocusNumber,\n        restoreEpisodeFocusId,\n        details?.seasons?.size,\n        selectedSeason?.episodes?.size,\n    ) {\n        val shouldFocusPrimary = when {\n            selectedEpisode != null -> true\n            selectedSeason != null -> restoreEpisodeFocusId == null && selectedSeason.episodes.isNotEmpty()\n            details != null -> restoreSeasonFocusNumber == null\n            else -> false\n        }\n        if (!shouldFocusPrimary) return@LaunchedEffect\n        withFrameNanos { }\n        primaryActionFocusRequester.requestFocus()\n    }\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('SeriesDetailsPane primary focus effect mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                            onPlay = { onPlay(selectedEpisode) },\n                            onDownload = { onDownload(selectedEpisode) },\n'''
+          new = '''                            onPlay = { onPlay(selectedEpisode) },\n                            onPlayFromBeginning = { onPlayFromBeginning(selectedEpisode) },\n                            onDownload = { onDownload(selectedEpisode) },\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Episode detail playback callbacks mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                                    EpisodeRow(\n                                        episode = episode,\n                                        download = download,\n                                        onOpen = { onEpisodeSelected(episode.episodeId) },\n                                        playFocusRequester = if (episode.episodeId == firstEpisodeId) {\n                                            primaryActionFocusRequester\n                                        } else {\n                                            null\n                                        },\n                                        onPlay = { onPlay(episode) },\n                                        onDownload = { onDownload(episode) },\n'''
+          new = '''                                    EpisodeRow(\n                                        episode = episode,\n                                        download = download,\n                                        onOpen = { onEpisodeSelected(episode.episodeId) },\n                                        entryFocusRequester = if (episode.episodeId == firstEpisodeId) {\n                                            primaryActionFocusRequester\n                                        } else {\n                                            null\n                                        },\n                                        restoreFocus = restoreEpisodeFocusId == episode.episodeId,\n                                        onFocusRestored = onEpisodeFocusRestored,\n                                        onPlay = { onPlay(episode) },\n                                        onPlayFromBeginning = { onPlayFromBeginning(episode) },\n                                        onDownload = { onDownload(episode) },\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Season episode row block mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''                                    SeriesSeasonRow(\n                                        series = selected,\n                                        season = season,\n                                        onClick = { onSeasonSelected(season.seasonNumber) },\n                                        modifier = if (season.seasonId == firstSeasonId) {\n                                            Modifier.focusRequester(primaryActionFocusRequester)\n                                        } else {\n                                            Modifier\n                                        },\n                                    )\n'''
+          new = '''                                    SeriesSeasonRow(\n                                        series = selected,\n                                        season = season,\n                                        onClick = { onSeasonSelected(season.seasonNumber) },\n                                        entryFocusRequester = if (season.seasonId == firstSeasonId) {\n                                            primaryActionFocusRequester\n                                        } else {\n                                            null\n                                        },\n                                        restoreFocus = restoreSeasonFocusNumber == season.seasonNumber,\n                                        onFocusRestored = onSeasonFocusRestored,\n                                    )\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Series season row block mismatch')
+          text = text.replace(old, new, 1)
+
+          start = text.index('@Composable\nprivate fun SeriesSeasonRow(')
+          end = text.index('\n@Composable\nprivate fun SeriesSeasonHeader(', start)
+          season_row = '''@Composable\nprivate fun SeriesSeasonRow(\n    series: SeriesSummary,\n    season: SeriesSeason,\n    onClick: () -> Unit,\n    entryFocusRequester: FocusRequester?,\n    restoreFocus: Boolean,\n    onFocusRestored: () -> Unit,\n) {\n    val localFocusRequester = remember(season.seasonId) { FocusRequester() }\n    val focusRequester = entryFocusRequester ?: localFocusRequester\n    var focused by remember(season.seasonId) { mutableStateOf(false) }\n\n    LaunchedEffect(restoreFocus, season.seasonId) {\n        if (!restoreFocus) return@LaunchedEffect\n        withFrameNanos { }\n        localFocusRequester.requestFocus()\n        onFocusRestored()\n    }\n\n    Surface(\n        modifier = Modifier\n            .fillMaxWidth()\n            .focusRequester(focusRequester)\n            .onFocusChanged { focused = it.isFocused }\n            .border(\n                width = 2.dp,\n                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,\n                shape = RoundedCornerShape(10.dp),\n            )\n            .clickable(onClick = onClick),\n        shape = RoundedCornerShape(10.dp),\n        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),\n        tonalElevation = 0.dp,\n    ) {\n        Row(\n            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),\n            verticalAlignment = Alignment.CenterVertically,\n            horizontalArrangement = Arrangement.spacedBy(12.dp),\n        ) {\n            RemotePoster(\n                url = season.posterUrl ?: series.posterUrl,\n                title = season.name ?: "Season ${season.seasonNumber}",\n                modifier = Modifier\n                    .width(64.dp)\n                    .aspectRatio(2f / 3f),\n            )\n            Column(modifier = Modifier.weight(1f)) {\n                Text(\n                    season.name ?: "Season ${season.seasonNumber}",\n                    fontWeight = FontWeight.Medium,\n                )\n                Text(\n                    "${season.episodes.size} episode${if (season.episodes.size == 1) "" else "s"}",\n                    style = MaterialTheme.typography.bodySmall,\n                    color = MaterialTheme.colorScheme.onSurfaceVariant,\n                )\n                season.airDate?.takeIf(String::isNotBlank)?.let { airDate ->\n                    Text(\n                        airDate,\n                        style = MaterialTheme.typography.labelSmall,\n                        color = MaterialTheme.colorScheme.onSurfaceVariant,\n                    )\n                }\n            }\n            Text(\n                "Open",\n                style = MaterialTheme.typography.labelLarge,\n                color = MaterialTheme.colorScheme.primary,\n                fontWeight = FontWeight.Medium,\n            )\n        }\n    }\n}\n'''
+          text = text[:start] + season_row + text[end:]
+
+          old = '''    onPlay: () -> Unit,\n    onDownload: () -> Unit,\n'''
+          new = '''    onPlay: () -> Unit,\n    onPlayFromBeginning: () -> Unit,\n    onDownload: () -> Unit,\n'''
+          if text.count(old) != 2:
+              raise RuntimeError(f'Expected two episode playback signatures, found {text.count(old)}')
+          text = text.replace(old, new, 2)
+
+          old = '''        playFocusRequester = playFocusRequester,\n        onPlay = onPlay,\n        onDownload = onDownload,\n'''
+          new = '''        entryFocusRequester = playFocusRequester,\n        restoreFocus = false,\n        onFocusRestored = {},\n        onPlay = onPlay,\n        onPlayFromBeginning = onPlayFromBeginning,\n        onDownload = onDownload,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('Episode detail EpisodeRow bridge mismatch')
+          text = text.replace(old, new, 1)
+
+          old = '''    showHeader: Boolean = true,\n    playFocusRequester: FocusRequester? = null,\n    onPlay: () -> Unit,\n    onPlayFromBeginning: () -> Unit,\n'''
+          new = '''    showHeader: Boolean = true,\n    entryFocusRequester: FocusRequester? = null,\n    restoreFocus: Boolean = false,\n    onFocusRestored: () -> Unit = {},\n    onPlay: () -> Unit,\n    onPlayFromBeginning: () -> Unit,\n'''
+          if text.count(old) != 1:
+              raise RuntimeError('EpisodeRow focus signature mismatch')
+          text = text.replace(old, new, 1)
+
+          start = text.index('@Composable\nprivate fun EpisodeRow(')
+          end = text.index('\nprivate fun seriesDownloadProgressLabel(', start)
+          episode_row = '''@Composable\nprivate fun EpisodeRow(\n    episode: SeriesEpisode,\n    download: OfflineDownload?,\n    onOpen: (() -> Unit)? = null,\n    showHeader: Boolean = true,\n    entryFocusRequester: FocusRequester? = null,\n    restoreFocus: Boolean = false,\n    onFocusRestored: () -> Unit = {},\n    onPlay: () -> Unit,\n    onPlayFromBeginning: () -> Unit,\n    onDownload: () -> Unit,\n    onPauseDownload: (OfflineDownload) -> Unit,\n    onResumeDownload: (OfflineDownload) -> Unit,\n    onRetryDownload: (OfflineDownload) -> Unit,\n    onRemoveDownload: (OfflineDownload) -> Unit,\n    onClearProgress: () -> Unit,\n) {\n    val localFocusRequester = remember(episode.episodeId) { FocusRequester() }\n    val rowFocusRequester = entryFocusRequester ?: localFocusRequester\n    var focused by remember(episode.episodeId) { mutableStateOf(false) }\n\n    LaunchedEffect(restoreFocus, episode.episodeId) {\n        if (!restoreFocus || onOpen == null) return@LaunchedEffect\n        withFrameNanos { }\n        localFocusRequester.requestFocus()\n        onFocusRestored()\n    }\n\n    val rowModifier = if (onOpen == null) {\n        Modifier.fillMaxWidth()\n    } else {\n        Modifier\n            .fillMaxWidth()\n            .focusRequester(rowFocusRequester)\n            .onFocusChanged { focused = it.isFocused }\n            .border(\n                width = 2.dp,\n                color = if (focused) MaterialTheme.colorScheme.primary else Color.Transparent,\n                shape = RoundedCornerShape(10.dp),\n            )\n            .clickable(onClick = onOpen)\n    }\n\n    Surface(\n        modifier = rowModifier,\n        shape = RoundedCornerShape(10.dp),\n        color = if (showHeader) {\n            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f)\n        } else {\n            MaterialTheme.colorScheme.surface.copy(alpha = 0f)\n        },\n        tonalElevation = 0.dp,\n    ) {\n        Column(\n            modifier = Modifier.padding(horizontal = if (showHeader) 10.dp else 0.dp, vertical = 9.dp),\n        ) {\n            if (showHeader) {\n                Row(\n                    modifier = Modifier.fillMaxWidth(),\n                    verticalAlignment = Alignment.CenterVertically,\n                ) {\n                    Column(modifier = Modifier.weight(1f)) {\n                        Text(\n                            "E${episode.episodeNumber} · ${episode.title}",\n                            fontWeight = FontWeight.Medium,\n                        )\n                        episode.positionMs?.takeIf { it > 0L }?.let {\n                            Text(\n                                if (episode.resumeAvailable) "Continue available" else "Watched",\n                                style = MaterialTheme.typography.labelSmall,\n                                color = MaterialTheme.colorScheme.onSurfaceVariant,\n                            )\n                        }\n                    }\n                    Text(\n                        "Details",\n                        style = MaterialTheme.typography.labelLarge,\n                        color = MaterialTheme.colorScheme.primary,\n                        fontWeight = FontWeight.Medium,\n                    )\n                }\n            }\n            if (onOpen == null) {\n                Row(\n                    modifier = Modifier.padding(top = if (showHeader) 7.dp else 0.dp),\n                    horizontalArrangement = Arrangement.spacedBy(6.dp),\n                    verticalAlignment = Alignment.CenterVertically,\n                ) {\n                    Button(\n                        onClick = onPlay,\n                        modifier = entryFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,\n                        shape = RoundedCornerShape(10.dp),\n                    ) {\n                        Text(if (episode.resumeAvailable) "Continue" else "Play")\n                    }\n                    if (episode.resumeAvailable) {\n                        TextButton(onClick = onPlayFromBeginning) {\n                            Text("Play from beginning")\n                        }\n                    }\n                    if ((episode.positionMs ?: 0L) > 0L) {\n                        TextButton(onClick = onClearProgress) { Text("Clear") }\n                    }\n                }\n            }\n        }\n    }\n}\n'''
+          text = text[:start] + episode_row + text[end:]
+          details.write_text(text, encoding='utf-8')
+
+          contract_test = Path('app/src/test/java/app/ownplay/player/ui/series/SeriesTvContractTest.kt')
+          contract_test.parent.mkdir(parents=True, exist_ok=True)
+          contract_test.write_text('''package app.ownplay.player.ui.series\n\nimport app.ownplay.player.testing.sourceText\nimport org.junit.Assert.assertFalse\nimport org.junit.Assert.assertTrue\nimport org.junit.Test\n\nclass SeriesTvContractTest {\n    @Test\n    fun `series use provider categories and a poster grid without All`() {\n        val route = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")\n\n        assertTrue(route.contains("items(catalog.categories"))\n        assertTrue(route.contains("category.providerCategoryKey"))\n        assertTrue(route.contains("LazyVerticalGrid("))\n        assertTrue(route.contains("gridItems(series"))\n        assertFalse(route.contains("\\\"All\\\""))\n    }\n\n    @Test\n    fun `continue watching restores the exact episode card after playback`() {\n        val route = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")\n\n        assertTrue(route.contains("text = \\\"Continue Watching\\\""))\n        assertTrue(route.contains("SeriesCatalogFocusOrigin.CONTINUE_WATCHING"))\n        assertTrue(route.contains("contentId = episode.episodeId"))\n        assertTrue(route.contains("restoreCatalogFocusTarget"))\n    }\n\n    @Test\n    fun `series drilldown Back restores series season and episode origins`() {\n        val route = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")\n        val details = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt")\n\n        assertTrue(route.contains("SeriesCatalogFocusTarget(series.seriesId, origin)"))\n        assertTrue(route.contains("restoreSeasonFocusNumber = selectedSeasonNumber"))\n        assertTrue(route.contains("restoreEpisodeFocusId = selectedEpisodeId"))\n        assertTrue(details.contains("restoreSeasonFocusNumber == season.seasonNumber"))\n        assertTrue(details.contains("restoreEpisodeFocusId == episode.episodeId"))\n    }\n\n    @Test\n    fun `episode details expose Continue and Play from beginning`() {\n        val details = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt")\n\n        assertTrue(details.contains("Text(if (episode.resumeAvailable) \\\"Continue\\\" else \\\"Play\\\")"))\n        assertTrue(details.contains("Text(\\\"Play from beginning\\\")"))\n        assertTrue(details.contains("if (onOpen == null)"))\n    }\n\n    @Test\n    fun `series focus uses fixed border geometry`() {\n        val route = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt")\n        val details = sourceText("src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt")\n\n        assertTrue(route.contains("onFocusChanged { focused = it.isFocused }"))\n        assertTrue(route.contains("width = 2.dp"))\n        assertTrue(details.contains("onFocusChanged { focused = it.isFocused }"))\n        assertTrue(details.contains("width = 2.dp"))\n    }\n}\n''', encoding='utf-8')
+
+          policy_test = Path('app/src/test/java/app/ownplay/player/ui/series/SeriesPlaybackStartPolicyTest.kt')
+          policy_test.write_text('''package app.ownplay.player.ui.series\n\nimport app.ownplay.player.series.SeriesEpisode\nimport org.junit.Assert.assertEquals\nimport org.junit.Assert.assertNull\nimport org.junit.Assert.assertSame\nimport org.junit.Test\n\nclass SeriesPlaybackStartPolicyTest {\n    @Test\n    fun `continue keeps the saved episode checkpoint`() {\n        val episode = episode()\n\n        assertSame(episode, seriesPlaybackSnapshot(episode, fromBeginning = false))\n    }\n\n    @Test\n    fun `play from beginning clears only the playback snapshot checkpoint`() {\n        val episode = episode()\n\n        val playback = seriesPlaybackSnapshot(episode, fromBeginning = true)\n\n        assertNull(playback.positionMs)\n        assertEquals(false, playback.progressCompleted)\n        assertNull(playback.progressUpdatedAtEpochMillis)\n        assertEquals(45_000L, episode.positionMs)\n        assertEquals(300_000L, episode.durationMs)\n    }\n\n    private fun episode() = SeriesEpisode(\n        episodeId = "episode-1",\n        seriesId = "series-1",\n        seriesTitle = "Series",\n        providerEpisodeId = 11,\n        seasonNumber = 2,\n        episodeNumber = 3,\n        title = "Episode",\n        containerExtension = "mp4",\n        durationSeconds = null,\n        posterUrl = null,\n        positionMs = 45_000L,\n        durationMs = 300_000L,\n        progressCompleted = false,\n        progressUpdatedAtEpochMillis = 123L,\n    )\n}\n''', encoding='utf-8')
+          PY
+
+          git diff --check
+          if grep -RInE '"All"' app/src/main/java/app/ownplay/player/ui/series app/src/test/java/app/ownplay/player/ui/series; then
+            echo 'Forbidden All label remains in Series UI.' >&2
+            exit 2
+          fi
+          grep -Fq 'LazyVerticalGrid(' app/src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt
+          grep -Fq 'SeriesCatalogFocusOrigin.CONTINUE_WATCHING' app/src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt
+          grep -Fq 'Text(if (episode.resumeAvailable) "Continue" else "Play")' app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt
+          grep -Fq 'Text("Play from beginning")' app/src/main/java/app/ownplay/player/ui/series/SeriesDetailsPane.kt
+          grep -Fq 'seriesPlaybackSnapshot(episode, fromBeginning)' app/src/main/java/app/ownplay/player/ui/series/SeriesRoute.kt
+
+      - name: Remove runner and create exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/apply-series-tv-contract-hardening.yml
+          git config user.name 'OwnPlay TV Automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git commit -m 'Harden Series TV drilldown and playback choices'
+          echo "FINAL_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Validate exact Series candidate without APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+          gradle \
+            :app:kspDebugKotlin \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :app:compileDebugAndroidTestKotlin \
+            --stacktrace
+
+      - name: Verify zero APK and Room stability
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(find app/build -type f -name '*.apk' -print 2>/dev/null | tee /tmp/ownplay-tv-apks.txt | wc -l)"
+          echo "APK artifacts: ${count}"
+          test "$count" -eq 0
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          import sys
+
+          root = pathlib.Path('app/schemas')
+          generated = sorted(root.rglob('*.json'))
+          problems = []
+          if len(generated) != 6:
+              problems.append(f'Expected 6 Room schemas, found {len(generated)}.')
+          for path in generated:
+              relative = path.as_posix()
+              committed = subprocess.check_output(['git', 'show', f'HEAD:{relative}'], text=True)
+              if json.loads(path.read_text(encoding='utf-8')) != json.loads(committed):
+                  problems.append(f'Room schema drift: {relative}')
+          if problems:
+              print('\n'.join(problems))
+              sys.exit(7)
+          print('Validated 6 committed Room schema files.')
+          PY
+          test "$(git rev-parse HEAD)" = "$FINAL_HEAD"
+
+      - name: Push validated Series candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin HEAD:agent/series-tv-contract-hardening-no-apk
+          echo "Validated final HEAD: $FINAL_HEAD"
