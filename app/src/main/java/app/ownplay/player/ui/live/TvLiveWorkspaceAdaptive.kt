@@ -30,7 +30,6 @@ import app.ownplay.player.epg.EpgSnapshot
 import app.ownplay.player.live.LiveBrowseOrder
 import app.ownplay.player.live.LiveBrowseState
 import app.ownplay.player.playback.LivePlaybackSelection
-import app.ownplay.player.playback.PlaybackNavigationDirection
 import app.ownplay.player.playback.PlaybackState
 import app.ownplay.player.playback.PlaybackVideoOutput
 import app.ownplay.player.ui.EpgPanel
@@ -38,7 +37,7 @@ import app.ownplay.player.ui.LivePreviewPanel
 import app.ownplay.player.ui.view.ContentViewMode
 
 /**
- * Landscape Live shell with one consistent browse model across touch and TV layouts.
+ * TV-only Live workspace with one deterministic remote-first browse model.
  *
  * Live browsing starts at category level. After a category is chosen the established
  * List / Compact / Cards channel browser is shown. Before a channel is selected, browsing owns
@@ -70,12 +69,6 @@ internal fun TvLiveWorkspaceAdaptive(
     onOrderChanged: (LiveBrowseOrder) -> Unit,
     onCustomGroupSelected: (String?) -> Unit,
     onChannelSelected: (String) -> Unit,
-    onPlay: () -> Unit,
-    onPause: () -> Unit,
-    onRetry: () -> Unit,
-    onNavigatePreview: (PlaybackNavigationDirection) -> Unit,
-    onOpenFullscreen: (LivePlaybackSelection) -> Unit,
-    onPreviewClosed: () -> Unit,
     onOpenEpgGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -122,7 +115,7 @@ internal fun TvLiveWorkspaceAdaptive(
     }
 
     if (preview == null) {
-        LandscapeBrowseSurface(
+        TvLiveBrowseSurface(
             state = state,
             hierarchyLevel = hierarchyLevel,
             playingChannelId = null,
@@ -151,7 +144,7 @@ internal fun TvLiveWorkspaceAdaptive(
             .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        LandscapeBrowseSurface(
+        TvLiveBrowseSurface(
             state = state,
             hierarchyLevel = hierarchyLevel,
             playingChannelId = preview.request.channelId,
@@ -190,12 +183,6 @@ internal fun TvLiveWorkspaceAdaptive(
                     selection = preview,
                     state = playbackState,
                     videoOutput = videoOutput,
-                    onPlay = onPlay,
-                    onPause = onPause,
-                    onRetry = onRetry,
-                    onNavigate = onNavigatePreview,
-                    onOpenFullscreen = { onOpenFullscreen(preview) },
-                    onClose = onPreviewClosed,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
@@ -210,10 +197,10 @@ internal fun TvLiveWorkspaceAdaptive(
                             if (
                                 event.type == KeyEventType.KeyDown &&
                                 event.key == Key.DirectionLeft &&
-                                LandscapeLiveFocusPolicy.destination(
-                                    current = LandscapeLiveFocusZone.EPG,
-                                    action = LandscapeLiveFocusAction.LEFT,
-                                ) == LandscapeLiveFocusZone.BROWSER
+                                TvLiveFocusPolicy.destination(
+                                    current = TvLiveFocusZone.EPG,
+                                    action = TvLiveFocusAction.LEFT,
+                                ) == TvLiveFocusZone.BROWSER
                             ) {
                                 channelFocusRequester.requestFocus()
                                 true
@@ -228,7 +215,7 @@ internal fun TvLiveWorkspaceAdaptive(
 }
 
 @Composable
-private fun LandscapeBrowseSurface(
+private fun TvLiveBrowseSurface(
     state: LiveBrowseState,
     hierarchyLevel: LiveBrowseHierarchyLevel,
     playingChannelId: String?,
@@ -273,12 +260,12 @@ private fun LandscapeBrowseSurface(
     }
 }
 
-internal enum class LandscapeLiveFocusZone {
+internal enum class TvLiveFocusZone {
     BROWSER,
     EPG,
 }
 
-internal enum class LandscapeLiveFocusAction {
+internal enum class TvLiveFocusAction {
     LEFT,
     RIGHT,
     UP,
@@ -286,18 +273,18 @@ internal enum class LandscapeLiveFocusAction {
     BACK,
 }
 
-internal object LandscapeLiveFocusPolicy {
+internal object TvLiveFocusPolicy {
     /**
      * Browser arrows are deliberately left to Compose focus search so Cards keeps native 2D D-pad
      * navigation. Preview is presentation-only and therefore never a focus destination.
      */
     fun destination(
-        current: LandscapeLiveFocusZone,
-        action: LandscapeLiveFocusAction,
-    ): LandscapeLiveFocusZone? = when (current) {
-        LandscapeLiveFocusZone.BROWSER -> null
-        LandscapeLiveFocusZone.EPG -> when (action) {
-            LandscapeLiveFocusAction.LEFT -> LandscapeLiveFocusZone.BROWSER
+        current: TvLiveFocusZone,
+        action: TvLiveFocusAction,
+    ): TvLiveFocusZone? = when (current) {
+        TvLiveFocusZone.BROWSER -> null
+        TvLiveFocusZone.EPG -> when (action) {
+            TvLiveFocusAction.LEFT -> TvLiveFocusZone.BROWSER
             else -> null
         }
     }

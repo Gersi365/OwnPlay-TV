@@ -26,7 +26,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.ownplay.player.playback.LivePlaybackSelection
-import app.ownplay.player.playback.PlaybackNavigationDirection
 import app.ownplay.player.playback.PlaybackPresentationPolicy
 import app.ownplay.player.playback.PlaybackState
 import app.ownplay.player.playback.PlaybackVideoOutput
@@ -38,19 +37,12 @@ import app.ownplay.player.playback.PlaybackVideoOutput
  * browser so a second OK on the selected channel can open fullscreen. Back/ESC ownership remains
  * in LiveRoute so Preview closes first.
  */
-@Suppress("UNUSED_PARAMETER")
 @OptIn(UnstableApi::class)
 @Composable
 internal fun LivePreviewPanel(
     selection: LivePlaybackSelection,
     state: PlaybackState,
     videoOutput: PlaybackVideoOutput,
-    onPlay: () -> Unit,
-    onPause: () -> Unit,
-    onRetry: () -> Unit,
-    onNavigate: (PlaybackNavigationDirection) -> Unit,
-    onOpenFullscreen: () -> Unit,
-    onClose: () -> Unit,
     modifier: Modifier = Modifier,
     showLiveBadge: Boolean = true,
 ) {

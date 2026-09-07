@@ -364,15 +364,15 @@ internal fun TVOwnPlayApp(
                             playbackState = playbackState,
                             videoOutput = runtime.playbackVideoOutput,
                             syncState = syncState,
-                            onPlay = runtime.playbackController::play,
-                            onPause = runtime.playbackController::pause,
-                            onRetry = runtime.playbackController::retry,
                             onOpenMovies = { openSection(TVSection.MOVIES) },
                             onOpenSeries = { openSection(TVSection.SERIES) },
                             onOpenSettings = { openSection(TVSection.SETTINGS) },
                             onPreviewRequested = { selection ->
                                 runtime.livePlaybackPresentationSession.showPreview(selection)
                                 runtime.playbackController.start(selection.request)
+                                liveTransitionGate.reconcileObserved(
+                                    LivePlaybackTransitionTarget.preview(selection),
+                                )
                             },
                             onPreviewClosed = {
                                 stopLivePresentation {
@@ -381,14 +381,6 @@ internal fun TVOwnPlayApp(
                             },
                             onOpenFullscreen = { selection ->
                                 openLiveFullscreen(activeSelection ?: selection)
-                            },
-                            onNavigatePreview = { direction ->
-                                activeSelection
-                                    ?.navigate(direction)
-                                    ?.let { target ->
-                                        runtime.livePlaybackPresentationSession.replaceSelection(target)
-                                        runtime.playbackController.start(target.request)
-                                    }
                             },
                         )
                     }

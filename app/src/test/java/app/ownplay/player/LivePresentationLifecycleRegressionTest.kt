@@ -31,6 +31,24 @@ class LivePresentationLifecycleRegressionTest {
     }
 
     @Test
+    fun rapidPreviewToFullscreenAcknowledgesPreviewBeforeSecondActivation() {
+        val source = sourceText("src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt")
+        val callback = source
+            .substringAfter("onPreviewRequested = { selection ->")
+            .substringBefore("onPreviewClosed =")
+
+        val showPreview = callback.indexOf("runtime.livePlaybackPresentationSession.showPreview(selection)")
+        val startPlayback = callback.indexOf("runtime.playbackController.start(selection.request)")
+        val acknowledgePreview = callback.indexOf("liveTransitionGate.reconcileObserved(")
+        val previewTarget = callback.indexOf("LivePlaybackTransitionTarget.preview(selection)")
+
+        assertTrue(showPreview >= 0)
+        assertTrue(showPreview < startPlayback)
+        assertTrue(startPlayback < acknowledgePreview)
+        assertTrue(acknowledgePreview < previewTarget)
+    }
+
+    @Test
     fun transientSessionIsNotDiskBacked() {
         val source = sourceText(
             "src/main/java/app/ownplay/player/playback/LivePlaybackPresentationSession.kt",

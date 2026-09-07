@@ -33,7 +33,6 @@ import app.ownplay.player.playback.LiveChannelSelectionAction
 import app.ownplay.player.playback.LiveChannelSelectionRouter
 import app.ownplay.player.playback.LivePlaybackBrowseContext
 import app.ownplay.player.playback.LivePlaybackSelection
-import app.ownplay.player.playback.PlaybackNavigationDirection
 import app.ownplay.player.playback.PlaybackState
 import app.ownplay.player.playback.PlaybackVideoOutput
 import app.ownplay.player.source.SourceSyncStage
@@ -58,16 +57,12 @@ internal fun LiveRoute(
     playbackState: PlaybackState,
     videoOutput: PlaybackVideoOutput,
     syncState: SourceSyncState,
-    onPlay: () -> Unit,
-    onPause: () -> Unit,
-    onRetry: () -> Unit,
     onOpenMovies: () -> Unit,
     onOpenSeries: () -> Unit,
     onOpenSettings: () -> Unit,
     onPreviewRequested: (LivePlaybackSelection) -> Unit,
     onPreviewClosed: () -> Unit,
     onOpenFullscreen: (LivePlaybackSelection) -> Unit,
-    onNavigatePreview: (PlaybackNavigationDirection) -> Unit,
 ) {
     val context = LocalContext.current
     val browseSession = remember(sourceId) { LiveBrowseSession() }
@@ -231,12 +226,6 @@ internal fun LiveRoute(
         onOrderChanged = browseSession::setOrder,
         onCustomGroupSelected = browseSession::selectCustomGroup,
         onChannelSelected = ::selectChannel,
-        onPlay = onPlay,
-        onPause = onPause,
-        onRetry = onRetry,
-        onNavigatePreview = onNavigatePreview,
-        onOpenFullscreen = onOpenFullscreen,
-        onPreviewClosed = onPreviewClosed,
         onOpenEpgGuide = { showEpgGuide = true },
     )
 
