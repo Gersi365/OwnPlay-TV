@@ -69,8 +69,8 @@ class OfflineDownloadStorageTest {
 
         assertTrue(
             OfflineDownloadStorage.isOwnedPendingDownloadCandidate(
-                ownerPackageName = "app.ownplay.mobile",
-                expectedPackageName = "app.ownplay.mobile",
+                ownerPackageName = "app.ownplay.tv",
+                expectedPackageName = "app.ownplay.tv",
                 downloadUri = marker,
                 expectedDownloadId = downloadId,
             ),
@@ -78,7 +78,7 @@ class OfflineDownloadStorageTest {
         assertFalse(
             OfflineDownloadStorage.isOwnedPendingDownloadCandidate(
                 ownerPackageName = null,
-                expectedPackageName = "app.ownplay.mobile",
+                expectedPackageName = "app.ownplay.tv",
                 downloadUri = marker,
                 expectedDownloadId = downloadId,
             ),
@@ -86,15 +86,15 @@ class OfflineDownloadStorageTest {
         assertFalse(
             OfflineDownloadStorage.isOwnedPendingDownloadCandidate(
                 ownerPackageName = "com.example.other",
-                expectedPackageName = "app.ownplay.mobile",
+                expectedPackageName = "app.ownplay.tv",
                 downloadUri = marker,
                 expectedDownloadId = downloadId,
             ),
         )
         assertFalse(
             OfflineDownloadStorage.isOwnedPendingDownloadCandidate(
-                ownerPackageName = "app.ownplay.mobile",
-                expectedPackageName = "app.ownplay.mobile",
+                ownerPackageName = "app.ownplay.tv",
+                expectedPackageName = "app.ownplay.tv",
                 downloadUri = "ownplay://offline-download/other",
                 expectedDownloadId = downloadId,
             ),

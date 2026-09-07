@@ -14,14 +14,10 @@ import kotlinx.coroutines.flow.asStateFlow
 data class LivePlaybackPresentationSessionState(
     val selection: LivePlaybackSelection? = null,
     val surface: LivePlaybackPresentationSurface? = null,
-    val fullscreenEntryReason: LiveFullscreenEntryReason? = null,
 ) {
     init {
         require((selection == null) == (surface == null)) {
             "Live presentation selection and surface must be present together"
-        }
-        require(surface == LivePlaybackPresentationSurface.FULLSCREEN || fullscreenEntryReason == null) {
-            "Fullscreen entry reason is only valid for fullscreen presentation"
         }
     }
 
@@ -40,14 +36,10 @@ class LivePlaybackPresentationSession {
         )
     }
 
-    fun showFullscreen(
-        selection: LivePlaybackSelection,
-        entryReason: LiveFullscreenEntryReason? = null,
-    ) {
+    fun showFullscreen(selection: LivePlaybackSelection) {
         _state.value = LivePlaybackPresentationSessionState(
             selection = selection,
             surface = LivePlaybackPresentationSurface.FULLSCREEN,
-            fullscreenEntryReason = entryReason,
         )
     }
 

@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.live
 
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,8 +43,7 @@ import app.ownplay.player.ui.view.ContentViewMode
  *
  * The channel level deliberately reuses the established List / Compact / Cards implementation so
  * hierarchy does not fork playback or personalization behavior. Back/ESC ownership lives in
- * [LiveBrowseHierarchyPolicy] and is applied by LiveRoute. Non-TV callers remain on the established
- * browse behavior and do not receive TV focus fallback semantics.
+ * [LiveBrowseHierarchyPolicy] and is applied by LiveRoute.
  */
 @Composable
 internal fun HierarchicalLiveBrowse(
@@ -67,10 +64,7 @@ internal fun HierarchicalLiveBrowse(
     channelFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val useTvFocusFallback = isTelevision && channelFocusRequester != null
+    val useTvFocusFallback = channelFocusRequester != null
     val resolvedChannelFocusId = if (useTvFocusFallback) {
         focusChannelId?.takeIf { candidate ->
             state.channels.any { channel -> channel.channelId == candidate }
@@ -93,7 +87,7 @@ internal fun HierarchicalLiveBrowse(
             modifier = modifier,
         )
 
-        LiveBrowseHierarchyLevel.CHANNELS -> PortraitLiveBrowseWithViewModes(
+        LiveBrowseHierarchyLevel.CHANNELS -> TvLiveBrowseWithViewModes(
             state = state,
             playingChannelId = playingChannelId,
             currentEpgByChannelId = currentEpgByChannelId,
@@ -108,7 +102,7 @@ internal fun HierarchicalLiveBrowse(
             focusChannelId = resolvedChannelFocusId,
             focusRequestGeneration = resolvedFocusRequestGeneration,
             channelFocusRequester = channelFocusRequester,
-            showCategoryStrip = !isTelevision,
+            showCategoryStrip = false,
             modifier = modifier,
         )
     }
@@ -120,9 +114,6 @@ private fun LiveCategoryHierarchyPicker(
     onCategorySelected: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val preferredCategoryKey = state.query.categoryKey?.takeIf { selected ->
         state.categories.any { category -> category.providerCategoryKey == selected }
     } ?: state.categories.firstOrNull()?.providerCategoryKey
@@ -135,12 +126,11 @@ private fun LiveCategoryHierarchyPicker(
     val initialFocusRequester = remember(preferredCategoryKey, state.categories) { FocusRequester() }
 
     LaunchedEffect(
-        isTelevision,
         preferredCategoryKey,
         preferredCategoryIndex,
         state.categories,
     ) {
-        if (!isTelevision || preferredCategoryKey == null || preferredCategoryIndex < 0) {
+        if (preferredCategoryKey == null || preferredCategoryIndex < 0) {
             return@LaunchedEffect
         }
         categoryListState.scrollToItem(preferredCategoryIndex)

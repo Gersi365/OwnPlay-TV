@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,9 +51,6 @@ internal fun LiveManagementScreen(
     onBack: () -> Unit,
     focusPrimaryOnEntry: Boolean = false,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val backFocusRequester = remember { FocusRequester() }
     val primaryFocusRequester = remember { FocusRequester() }
     var sourceId by remember(summaries) {
@@ -63,8 +58,8 @@ internal fun LiveManagementScreen(
     }
     val selectedSourceId = sourceId
 
-    LaunchedEffect(isTelevision, focusPrimaryOnEntry, selectedSourceId) {
-        if (isTelevision && focusPrimaryOnEntry) {
+    LaunchedEffect(focusPrimaryOnEntry, selectedSourceId) {
+        if (focusPrimaryOnEntry) {
             if (selectedSourceId == null) {
                 backFocusRequester.requestFocus()
             } else {
@@ -189,52 +184,6 @@ internal fun LiveManagementScreen(
         }
     }
 
-    fun persistDraggedChannelMove(
-        channelId: String,
-        anchorChannelId: String,
-        placement: ManualOrderPlacement,
-        favoriteOrder: Boolean,
-    ) {
-        orderError = null
-        scope.launch {
-            try {
-                if (favoriteOrder) {
-                    when (
-                        runtime.moveFavoriteRelative(
-                            sourceId = selectedSourceId,
-                            channelId = channelId,
-                            anchorChannelId = anchorChannelId,
-                            placement = placement,
-                        )
-                    ) {
-                        is FavoriteMutationResult.Success -> orderError = null
-                        is FavoriteMutationResult.Failure -> {
-                            orderError = "Could not save channel order."
-                        }
-                    }
-                } else {
-                    when (
-                        runtime.moveChannelRelative(
-                            sourceId = selectedSourceId,
-                            channelId = channelId,
-                            anchorChannelId = anchorChannelId,
-                            placement = placement,
-                        )
-                    ) {
-                        is ManualOrderMutationResult.Success -> orderError = null
-                        is ManualOrderMutationResult.Rejected,
-                        ManualOrderMutationResult.InvalidSourceId,
-                        ManualOrderMutationResult.PersistenceFailure,
-                        -> orderError = "Could not save channel order."
-                    }
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                orderError = "Could not save channel order."
-            }
-        }
-    }
 
     fun moveSelectedUp() {
         if (!canMoveSelectedUp) return
@@ -367,7 +316,7 @@ internal fun LiveManagementScreen(
             )
         }
 
-        if (isTelevision && selectedChannelId != null) {
+        if (selectedChannelId != null) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -446,22 +395,6 @@ internal fun LiveManagementScreen(
             },
             onClearLogoOverride = { channelId ->
                 scope.launch { runtime.clearLogoOverride(selectedSourceId, channelId) }
-            },
-            onManualMoveRelative = { channelId, anchorChannelId, placement ->
-                persistDraggedChannelMove(
-                    channelId = channelId,
-                    anchorChannelId = anchorChannelId,
-                    placement = placement,
-                    favoriteOrder = false,
-                )
-            },
-            onFavoriteMoveRelative = { channelId, anchorChannelId, placement ->
-                persistDraggedChannelMove(
-                    channelId = channelId,
-                    anchorChannelId = anchorChannelId,
-                    placement = placement,
-                    favoriteOrder = true,
-                )
             },
             onChannelSelected = {},
             modifier = Modifier.weight(1f),

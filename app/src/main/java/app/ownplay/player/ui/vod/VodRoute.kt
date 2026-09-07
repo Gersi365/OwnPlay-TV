@@ -7,7 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,8 +72,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -136,8 +133,6 @@ internal fun VodRoute(
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val featureRuntime = remember(context) { VodFeatureRuntime(context.applicationContext) }
     val downloadRuntime = remember(context) {
         OfflineDownloadFeatureRuntime(context.applicationContext)
@@ -453,7 +448,50 @@ internal fun VodRoute(
         return
     }
 
-    if (!isLandscape) {
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        MovieCategoryRail(
+            catalog = catalog,
+            selectedCategoryKey = selectedCategoryKey,
+            restoreFocusOnEntry = restoreCategoryFocusAfterDetailBack,
+            onFocusRestored = { restoreCategoryFocusAfterDetailBack = false },
+            onCategorySelected = { selectedCategoryKey = it },
+            modifier = Modifier
+                .widthIn(min = 170.dp, max = 220.dp)
+                .fillMaxHeight(),
+        )
+        MoviesCatalogContent(
+            catalog = catalog,
+            movies = filteredMovies,
+            loading = loading,
+            refreshError = refreshError,
+            query = query,
+            favoritesOnly = favoritesOnly,
+            sortOrder = sortOrder,
+            onQueryChanged = { query = it },
+            onFavoritesChanged = { favoritesOnly = it },
+            onSortChanged = { sortOrder = it },
+            onRefresh = ::refresh,
+            onMovieSelected = {
+                restoreDetailFocusAfterPlayback = false
+                restoreCategoryFocusAfterDetailBack = false
+                selectedMovie = it
+                runtime.onDemandPresentationSession.showMovieDetail(
+                    sourceId = sourceId,
+                    movieId = it.movieId,
+                    returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
+                )
+            },
+            showCategoryStrip = false,
+            selectedCategoryKey = selectedCategoryKey,
+            onCategorySelected = { selectedCategoryKey = it },
+            modifier = Modifier.weight(if (selectedMovie == null) 1f else 0.63f),
+        )
         selectedMovie?.let { movie ->
             MovieDetailsPane(
                 movie = movie,
@@ -461,7 +499,7 @@ internal fun VodRoute(
                 loading = detailsLoading,
                 error = detailsError,
                 download = downloadFor(movie),
-                focusBackOnEntry = true,
+                focusBackOnEntry = returnToLibraryOnDetailBack || restoreDetailFocusAfterPlayback,
                 onDismiss = ::closeMovieDetails,
                 onFavoriteChanged = { favorite -> setMovieFavorite(movie, favorite) },
                 onDownload = ::enqueueMovieDownload,
@@ -485,122 +523,13 @@ internal fun VodRoute(
                         returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
                     )
                 },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .weight(0.37f)
+                    .fillMaxHeight(),
             )
-            return
         }
     }
 
-    if (isLandscape) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MovieCategoryRail(
-                catalog = catalog,
-                selectedCategoryKey = selectedCategoryKey,
-                restoreFocusOnEntry = restoreCategoryFocusAfterDetailBack,
-                onFocusRestored = { restoreCategoryFocusAfterDetailBack = false },
-                onCategorySelected = { selectedCategoryKey = it },
-                modifier = Modifier
-                    .widthIn(min = 170.dp, max = 220.dp)
-                    .fillMaxHeight(),
-            )
-            MoviesCatalogContent(
-                catalog = catalog,
-                movies = filteredMovies,
-                loading = loading,
-                refreshError = refreshError,
-                query = query,
-                favoritesOnly = favoritesOnly,
-                sortOrder = sortOrder,
-                onQueryChanged = { query = it },
-                onFavoritesChanged = { favoritesOnly = it },
-                onSortChanged = { sortOrder = it },
-                onRefresh = ::refresh,
-                onMovieSelected = {
-                    restoreDetailFocusAfterPlayback = false
-                    restoreCategoryFocusAfterDetailBack = false
-                    selectedMovie = it
-                    runtime.onDemandPresentationSession.showMovieDetail(
-                        sourceId = sourceId,
-                        movieId = it.movieId,
-                        returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-                    )
-                },
-                showCategoryStrip = false,
-                selectedCategoryKey = selectedCategoryKey,
-                onCategorySelected = { selectedCategoryKey = it },
-                modifier = Modifier.weight(if (selectedMovie == null) 1f else 0.63f),
-            )
-            selectedMovie?.let { movie ->
-                MovieDetailsPane(
-                    movie = movie,
-                    details = details,
-                    loading = detailsLoading,
-                    error = detailsError,
-                    download = downloadFor(movie),
-                    focusBackOnEntry = returnToLibraryOnDetailBack || restoreDetailFocusAfterPlayback,
-                    onDismiss = ::closeMovieDetails,
-                    onFavoriteChanged = { favorite -> setMovieFavorite(movie, favorite) },
-                    onDownload = ::enqueueMovieDownload,
-                    onPauseDownload = ::pauseDownload,
-                    onResumeDownload = ::resumeDownload,
-                    onRetryDownload = ::retryDownload,
-                    onRemoveDownload = ::removeDownload,
-                    onClearProgress = { clearMovieProgress(movie) },
-                    onPlay = { target ->
-                        restoreDetailFocusAfterPlayback = false
-                        runtime.playbackController.start(
-                            PlaybackRequest(
-                                sourceId = sourceId,
-                                channelId = target.movieId,
-                                mediaKind = PlaybackMediaKind.MOVIE,
-                            ),
-                        )
-                        runtime.onDemandPresentationSession.showMoviePlayback(
-                            sourceId = sourceId,
-                            movie = target,
-                            returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-                        )
-                    },
-                    modifier = Modifier
-                        .weight(0.37f)
-                        .fillMaxHeight(),
-                )
-            }
-        }
-    } else {
-        MoviesCatalogContent(
-            catalog = catalog,
-            movies = filteredMovies,
-            loading = loading,
-            refreshError = refreshError,
-            query = query,
-            favoritesOnly = favoritesOnly,
-            sortOrder = sortOrder,
-            onQueryChanged = { query = it },
-            onFavoritesChanged = { favoritesOnly = it },
-            onSortChanged = { sortOrder = it },
-            onRefresh = ::refresh,
-            onMovieSelected = {
-                restoreDetailFocusAfterPlayback = false
-                restoreCategoryFocusAfterDetailBack = false
-                selectedMovie = it
-                runtime.onDemandPresentationSession.showMovieDetail(
-                    sourceId = sourceId,
-                    movieId = it.movieId,
-                    returnToLibraryOnDetailBack = returnToLibraryOnDetailBack,
-                )
-            },
-            showCategoryStrip = true,
-            selectedCategoryKey = selectedCategoryKey,
-            onCategorySelected = { selectedCategoryKey = it },
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
 }
 
 @Composable
@@ -792,18 +721,14 @@ private fun MovieCategoryRail(
     onCategorySelected: (String?) -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK ==
-            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
     val categoryFocusRequester = remember { FocusRequester() }
     val focusCategoryKey = selectedCategoryKey
         ?.takeIf { key -> catalog.categories.any { it.providerCategoryKey == key } }
         ?: catalog.categories.firstOrNull()?.providerCategoryKey
 
-    LaunchedEffect(isTelevision, restoreFocusOnEntry, focusCategoryKey) {
+    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {
         if (!restoreFocusOnEntry) return@LaunchedEffect
-        if (isTelevision && focusCategoryKey != null) {
+        if (focusCategoryKey != null) {
             withFrameNanos { }
             categoryFocusRequester.requestFocus()
         }
@@ -1001,10 +926,6 @@ private fun VodPlaybackScreen(
 ) {
     val playbackState by runtime.playbackController.state.collectAsState()
     val playbackControls = PlaybackPresentationPolicy.controlsFor(playbackState)
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK ==
-            android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
     val scope = rememberCoroutineScope()
     val backOwner = remember(movie.movieId) { Any() }
     val backFocusRequester = remember(movie.movieId) { FocusRequester() }
@@ -1111,8 +1032,7 @@ private fun VodPlaybackScreen(
         }
     }
 
-    LaunchedEffect(isTelevision, controlsVisible, playbackState, movie.movieId) {
-        if (!isTelevision) return@LaunchedEffect
+    LaunchedEffect(controlsVisible, playbackState, movie.movieId) {
         when {
             playbackState is PlaybackState.Failed -> backFocusRequester.requestFocus()
             controlsVisible -> controlsFocusRequester.requestFocus()
@@ -1120,7 +1040,7 @@ private fun VodPlaybackScreen(
         }
     }
 
-    val remoteWakeModifier = if (isTelevision && !controlsVisible) {
+    val remoteWakeModifier = if (!controlsVisible) {
         Modifier
             .focusRequester(wakeFocusRequester)
             .onKeyEvent { event ->
@@ -1145,7 +1065,6 @@ private fun VodPlaybackScreen(
                 .fillMaxSize()
                 .onPreviewKeyEvent { event ->
                     if (
-                        isTelevision &&
                         controlsVisible &&
                         event.nativeKeyEvent.isRemoteNavigationKeyDown()
                     ) {
@@ -1179,15 +1098,6 @@ private fun VodPlaybackScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(movie.movieId, controlsVisible) {
-                        detectTapGestures {
-                            if (controlsVisible) {
-                                controlsVisible = false
-                            } else {
-                                revealControls()
-                            }
-                        }
-                    }
                     .then(remoteWakeModifier),
             )
 

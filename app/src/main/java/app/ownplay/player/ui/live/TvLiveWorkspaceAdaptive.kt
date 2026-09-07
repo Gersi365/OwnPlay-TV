@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.live
 
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +24,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.epg.EpgProgram
 import app.ownplay.player.epg.EpgSnapshot
@@ -54,7 +52,7 @@ import app.ownplay.player.ui.view.ContentViewMode
  * channel is routed by LiveRoute to Fullscreen. Back/ESC precedence remains owned by LiveRoute.
  */
 @Composable
-internal fun LandscapeLiveWorkspaceAdaptive(
+internal fun TvLiveWorkspaceAdaptive(
     state: LiveBrowseState,
     hierarchyLevel: LiveBrowseHierarchyLevel,
     preview: LivePlaybackSelection?,
@@ -81,9 +79,6 @@ internal fun LandscapeLiveWorkspaceAdaptive(
     onOpenEpgGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val channelFocusRequester = remember { FocusRequester() }
     var focusChannelId by remember { mutableStateOf<String?>(null) }
     var channelFocusRequestGeneration by remember { mutableIntStateOf(0) }

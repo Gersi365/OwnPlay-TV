@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,7 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,9 +49,6 @@ internal fun EpgGuideSheet(
     failed: Boolean,
     onDismiss: () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val doneFocusRequester = remember { FocusRequester() }
     val programFocusRequester = remember { FocusRequester() }
     val nowEpochSeconds = System.currentTimeMillis() / 1_000L
@@ -65,7 +60,6 @@ internal fun EpgGuideSheet(
     }
     val currentIndex = timeline.current?.let(timeline.programs::indexOf)?.takeIf { it >= 0 }
     val initialFocus = EpgGuideFocusPolicy.initialFocus(
-        isTelevision = isTelevision,
         loading = loading,
         failed = failed,
         programCount = timeline.programs.size,
@@ -75,7 +69,6 @@ internal fun EpgGuideSheet(
     var selectedProgram by remember { mutableStateOf<EpgProgram?>(null) }
 
     LaunchedEffect(
-        isTelevision,
         loading,
         failed,
         timeline.programs.size,
@@ -120,12 +113,11 @@ internal fun EpgGuideSheet(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (isTelevision) {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.focusRequester(doneFocusRequester),
-                    ) { Text("Done") }
-                }
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.focusRequester(doneFocusRequester),
+                ) { Text("Done") }
+
             }
 
             when {

@@ -9,13 +9,13 @@ import org.junit.Test
 
 class TvPlaylistAvailabilityIntegrationContractTest {
     private val storeSource = sourceText(
-        "src/tv/java/app/ownplay/player/ui/TvPlaylistAvailabilityStore.kt",
+        "src/main/java/app/ownplay/player/ui/TvPlaylistAvailabilityStore.kt",
     )
     private val tvShellSource = sourceText(
-        "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
+        "src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
     )
     private val tvSettingsSource = sourceText(
-        "src/tv/java/app/ownplay/player/ui/TvSettingsScreen.kt",
+        "src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt",
     )
     private val playlistSource = sourceText(
         "src/main/java/app/ownplay/player/ui/PlaylistSettingsScreen.kt",

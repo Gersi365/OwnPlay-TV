@@ -6,9 +6,8 @@ import org.junit.Test
 
 class EpgGuideFocusPolicyTest {
     @Test
-    fun `tv focuses current program when available`() {
+    fun `focuses current program when available`() {
         val focus = EpgGuideFocusPolicy.initialFocus(
-            isTelevision = true,
             loading = false,
             failed = false,
             programCount = 5,
@@ -20,9 +19,8 @@ class EpgGuideFocusPolicyTest {
     }
 
     @Test
-    fun `tv falls back to first program when current is unavailable`() {
+    fun `falls back to first program when current is unavailable`() {
         val focus = EpgGuideFocusPolicy.initialFocus(
-            isTelevision = true,
             loading = false,
             failed = false,
             programCount = 4,
@@ -34,28 +32,14 @@ class EpgGuideFocusPolicyTest {
     }
 
     @Test
-    fun `tv falls back to done when guide cannot expose programs`() {
+    fun `falls back to done when guide cannot expose programs`() {
         listOf(
-            EpgGuideFocusPolicy.initialFocus(true, loading = true, failed = false, programCount = 4, currentIndex = 2),
-            EpgGuideFocusPolicy.initialFocus(true, loading = false, failed = true, programCount = 4, currentIndex = 2),
-            EpgGuideFocusPolicy.initialFocus(true, loading = false, failed = false, programCount = 0, currentIndex = null),
+            EpgGuideFocusPolicy.initialFocus(loading = true, failed = false, programCount = 4, currentIndex = 2),
+            EpgGuideFocusPolicy.initialFocus(loading = false, failed = true, programCount = 4, currentIndex = 2),
+            EpgGuideFocusPolicy.initialFocus(loading = false, failed = false, programCount = 0, currentIndex = null),
         ).forEach { focus ->
             assertEquals(EpgGuideFocusTarget.DONE, focus.target)
             assertNull(focus.programIndex)
         }
-    }
-
-    @Test
-    fun `non tv does not force focus`() {
-        val focus = EpgGuideFocusPolicy.initialFocus(
-            isTelevision = false,
-            loading = false,
-            failed = false,
-            programCount = 5,
-            currentIndex = 2,
-        )
-
-        assertEquals(EpgGuideFocusTarget.NONE, focus.target)
-        assertNull(focus.programIndex)
     }
 }

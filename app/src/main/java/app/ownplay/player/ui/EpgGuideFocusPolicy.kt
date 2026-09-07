@@ -13,15 +13,11 @@ internal data class EpgGuideInitialFocus(
 
 internal object EpgGuideFocusPolicy {
     fun initialFocus(
-        isTelevision: Boolean,
         loading: Boolean,
         failed: Boolean,
         programCount: Int,
         currentIndex: Int?,
     ): EpgGuideInitialFocus {
-        if (!isTelevision) {
-            return EpgGuideInitialFocus(EpgGuideFocusTarget.NONE)
-        }
         if (loading || failed || programCount <= 0) {
             return EpgGuideInitialFocus(EpgGuideFocusTarget.DONE)
         }

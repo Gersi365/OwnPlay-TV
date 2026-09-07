@@ -6,6 +6,10 @@ Durable interaction specification for OwnPlay TV.
 
 Update this file only when intended TV interaction changes, not when implementation checkpoints change.
 
+## TV-Only Form-Factor Invariant
+
+OwnPlay TV has one remote-first TV presentation. There is no phone/touch fallback presentation and no runtime orientation mode. The activity is fixed to landscape as a TV device invariant; interaction and layout logic must not branch between portrait and landscape variants.
+
 ---
 
 # 1. Visual Direction

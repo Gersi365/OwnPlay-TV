@@ -9,10 +9,10 @@ import org.junit.Test
 
 class TvSettingsPresentationContractTest {
     private val tvSettingsSource = sourceText(
-        "src/tv/java/app/ownplay/player/ui/TvSettingsScreen.kt",
+        "src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt",
     )
     private val tvShellSource = sourceText(
-        "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
+        "src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
     )
     private val settingsComponentsSource = sourceText(
         "src/main/java/app/ownplay/player/ui/SettingsComponents.kt",

@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.series
 
-import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,15 +69,11 @@ internal fun SeriesDetailsPane(
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val primaryActionFocusRequester = remember(selected.seriesId) { FocusRequester() }
     val selectedSeason = details?.seasons?.firstOrNull { it.seasonNumber == selectedSeasonNumber }
     val selectedEpisode = selectedSeason?.episodes?.firstOrNull { it.episodeId == selectedEpisodeId }
 
     LaunchedEffect(
-        isTelevision,
         focusBackOnEntry,
         selected.seriesId,
         selectedSeasonNumber,
@@ -87,7 +81,6 @@ internal fun SeriesDetailsPane(
         details?.seasons?.size,
         selectedSeason?.episodes?.size,
     ) {
-        if (!isTelevision) return@LaunchedEffect
         val primaryTargetAvailable = when {
             selectedEpisode != null -> true
             selectedSeason != null -> selectedSeason.episodes.isNotEmpty()
@@ -487,10 +480,6 @@ private fun EpisodeRow(
     onRemoveDownload: (OfflineDownload) -> Unit,
     onClearProgress: () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val offlineCopyAvailable = !isTelevision && download?.state == DownloadStates.COMPLETED
     val rowModifier = if (onOpen == null) {
         Modifier.fillMaxWidth()
     } else {
@@ -550,86 +539,10 @@ private fun EpisodeRow(
                     modifier = playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
                     shape = RoundedCornerShape(10.dp),
                 ) {
-                    Text(
-                        when {
-                            offlineCopyAvailable && episode.resumeAvailable -> "Resume Offline"
-                            offlineCopyAvailable -> "Play Offline"
-                            episode.resumeAvailable -> "Resume"
-                            else -> "Play"
-                        },
-                    )
-                }
-                if (!isTelevision && !offlineCopyAvailable) {
-                    Button(
-                        onClick = {
-                            when (download?.state) {
-                                DownloadStates.QUEUED,
-                                DownloadStates.DOWNLOADING,
-                                -> onPauseDownload(download)
-                                DownloadStates.PAUSED -> onResumeDownload(download)
-                                DownloadStates.FAILED -> onRetryDownload(download)
-                                null -> onDownload()
-                                DownloadStates.COMPLETED -> Unit
-                            }
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                    ) {
-                        Text(
-                            when (download?.state) {
-                                DownloadStates.QUEUED,
-                                DownloadStates.DOWNLOADING,
-                                -> "Pause"
-                                DownloadStates.PAUSED -> "Resume"
-                                DownloadStates.FAILED -> "Retry"
-                                else -> "Download"
-                            },
-                        )
-                    }
-                }
-                if (!isTelevision && download != null) {
-                    IconButton(onClick = { onRemoveDownload(download) }) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Remove episode download")
-                    }
+                    Text(if (episode.resumeAvailable) "Resume" else "Play")
                 }
                 if ((episode.positionMs ?: 0L) > 0L) {
                     TextButton(onClick = onClearProgress) { Text("Clear") }
-                }
-            }
-            if (!isTelevision && offlineCopyAvailable) {
-                Text(
-                    text = "Downloaded · Offline copy",
-                    modifier = Modifier.padding(top = 5.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-            if (
-                !isTelevision &&
-                (download?.state == DownloadStates.DOWNLOADING ||
-                    download?.state == DownloadStates.QUEUED ||
-                    download?.state == DownloadStates.PAUSED)
-            ) {
-                val fraction = download?.progressFraction
-                if (fraction == null) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                } else {
-                    LinearProgressIndicator(
-                        progress = { fraction },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                download?.let { managedDownload ->
-                    Text(
-                        seriesDownloadProgressLabel(managedDownload),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            if (!isTelevision) {
-                download?.failureReason?.takeIf { download.state == DownloadStates.FAILED }?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

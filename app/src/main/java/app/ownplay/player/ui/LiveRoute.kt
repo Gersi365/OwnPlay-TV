@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,7 +21,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,12 +39,11 @@ import app.ownplay.player.playback.PlaybackVideoOutput
 import app.ownplay.player.source.SourceSyncStage
 import app.ownplay.player.source.SourceSyncState
 import app.ownplay.player.ui.live.HierarchicalLiveBrowse
-import app.ownplay.player.ui.live.LandscapeLiveWorkspaceAdaptive
+import app.ownplay.player.ui.live.TvLiveWorkspaceAdaptive
 import app.ownplay.player.ui.live.LiveBrowseBackAction
 import app.ownplay.player.ui.live.LiveBrowseHierarchyLevel
 import app.ownplay.player.ui.live.LiveBrowseHierarchyPolicy
 import app.ownplay.player.ui.live.LiveChannelActivationAction
-import app.ownplay.player.ui.live.PortraitLiveBrowseWithViewModes
 import app.ownplay.player.ui.view.ContentViewMode
 import app.ownplay.player.ui.view.ContentViewModeStore
 import kotlinx.coroutines.CancellationException
@@ -72,11 +69,7 @@ internal fun LiveRoute(
     onOpenFullscreen: (LivePlaybackSelection) -> Unit,
     onNavigatePreview: (PlaybackNavigationDirection) -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
     val context = LocalContext.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val browseSession = remember(sourceId) { LiveBrowseSession() }
     val browseFlow = remember(sourceId) {
         browseSession.observe(runtime.observeLiveCatalog(sourceId))
@@ -90,19 +83,14 @@ internal fun LiveRoute(
     val preview = activeSelection?.takeIf { selection ->
         selection.request.sourceId == sourceId
     }
-    var hierarchyLevel by remember(sourceId, isTelevision) {
+    var hierarchyLevel by remember(sourceId) {
         mutableStateOf(
             LiveBrowseHierarchyPolicy.initialLevel(
-                isTelevision = isTelevision,
-                hasPreview = preview != null,
+                                hasPreview = preview != null,
             ),
         )
     }
-    val effectiveHierarchyLevel = if (isTelevision) {
-        hierarchyLevel
-    } else {
-        LiveBrowseHierarchyLevel.CHANNELS
-    }
+    val effectiveHierarchyLevel = hierarchyLevel
 
     var epgSnapshot by remember(sourceId, preview?.request?.channelId) {
         mutableStateOf<EpgSnapshot?>(null)
@@ -129,8 +117,7 @@ internal fun LiveRoute(
 
     BackHandler(
         enabled = LiveBrowseHierarchyPolicy.ownsBack(
-            isTelevision = isTelevision,
-            hasPreview = preview != null,
+                        hasPreview = preview != null,
             level = effectiveHierarchyLevel,
         ),
     ) {
@@ -195,9 +182,7 @@ internal fun LiveRoute(
 
     fun selectCategory(categoryKey: String?) {
         browseSession.selectCategory(categoryKey)
-        if (isTelevision) {
-            hierarchyLevel = LiveBrowseHierarchyLevel.CHANNELS
-        }
+        hierarchyLevel = LiveBrowseHierarchyLevel.CHANNELS
     }
 
     fun selectChannel(channelId: String) {
@@ -215,8 +200,7 @@ internal fun LiveRoute(
         ) {
             is LiveChannelSelectionAction.StartPlayback -> when (
                 LiveBrowseHierarchyPolicy.channelActivationAction(
-                    isTelevision = isTelevision,
-                    activePreviewChannelId = preview?.request?.channelId,
+                                        activePreviewChannelId = preview?.request?.channelId,
                     activatedChannelId = channelId,
                 )
             ) {
@@ -227,138 +211,35 @@ internal fun LiveRoute(
         }
     }
 
-    if (isLandscape) {
-        LandscapeLiveWorkspaceAdaptive(
-            state = browseState,
-            hierarchyLevel = effectiveHierarchyLevel,
-            preview = preview,
-            playbackState = playbackState,
-            videoOutput = videoOutput,
-            epgSnapshot = epgSnapshot,
-            currentEpgByChannelId = currentEpgByChannelId,
-            epgLoading = loadingEpg || epgLookupLoading,
-            epgFailed = selectedEpgFailed,
-            viewMode = liveViewMode,
-            onViewModeSelected = { mode ->
-                mutationScope.launch { viewModeStore.setLiveMode(mode) }
-            },
-            onSearchChange = browseSession::updateSearch,
-            onCategorySelected = if (isTelevision) {
-                ::selectCategory
-            } else {
-                browseSession::selectCategory
-            },
-            onFavoritesOnlyChanged = browseSession::setFavoritesOnly,
-            onOrderChanged = browseSession::setOrder,
-            onCustomGroupSelected = browseSession::selectCustomGroup,
-            onChannelSelected = ::selectChannel,
-            onPlay = onPlay,
-            onPause = onPause,
-            onRetry = onRetry,
-            onNavigatePreview = onNavigatePreview,
-            onOpenFullscreen = onOpenFullscreen,
-            onPreviewClosed = onPreviewClosed,
-            onOpenEpgGuide = { showEpgGuide = true },
-        )
-    } else {
-        Column(modifier = Modifier.fillMaxSize()) {
-            if (preview != null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    LivePreviewPanel(
-                        selection = preview,
-                        state = playbackState,
-                        videoOutput = videoOutput,
-                        onPlay = onPlay,
-                        onPause = onPause,
-                        onRetry = onRetry,
-                        onNavigate = onNavigatePreview,
-                        onOpenFullscreen = { onOpenFullscreen(preview) },
-                        onClose = onPreviewClosed,
-                    )
-                    EpgPanel(
-                        snapshot = epgSnapshot,
-                        loading = loadingEpg || epgLookupLoading,
-                        failed = selectedEpgFailed,
-                        onOpenGuide = { showEpgGuide = true },
-                    )
-                }
-            }
+    TvLiveWorkspaceAdaptive(
+        state = browseState,
+        hierarchyLevel = effectiveHierarchyLevel,
+        preview = preview,
+        playbackState = playbackState,
+        videoOutput = videoOutput,
+        epgSnapshot = epgSnapshot,
+        currentEpgByChannelId = currentEpgByChannelId,
+        epgLoading = loadingEpg || epgLookupLoading,
+        epgFailed = selectedEpgFailed,
+        viewMode = liveViewMode,
+        onViewModeSelected = { mode ->
+            mutationScope.launch { viewModeStore.setLiveMode(mode) }
+        },
+        onSearchChange = browseSession::updateSearch,
+        onCategorySelected = ::selectCategory,
+        onFavoritesOnlyChanged = browseSession::setFavoritesOnly,
+        onOrderChanged = browseSession::setOrder,
+        onCustomGroupSelected = browseSession::selectCustomGroup,
+        onChannelSelected = ::selectChannel,
+        onPlay = onPlay,
+        onPause = onPause,
+        onRetry = onRetry,
+        onNavigatePreview = onNavigatePreview,
+        onOpenFullscreen = onOpenFullscreen,
+        onPreviewClosed = onPreviewClosed,
+        onOpenEpgGuide = { showEpgGuide = true },
+    )
 
-            when {
-                loadingChannels -> CompactSyncStatus(
-                    text = if (browseState.catalogChannelCount == 0) {
-                        "Loading channels…"
-                    } else {
-                        "Updating channels…"
-                    },
-                )
-                loadingEpg -> CompactSyncStatus(text = "Updating EPG…")
-                channelRefreshFailed -> CompactRetryStatus(
-                    text = "Channel refresh failed. Existing channels were kept.",
-                    actionLabel = "Retry",
-                    onAction = { mutationScope.launch { runtime.refreshSource(sourceId) } },
-                )
-                epgRefreshFailed -> CompactRetryStatus(
-                    text = "Full EPG unavailable. Trying EPG for the selected channel.",
-                    actionLabel = "Retry EPG",
-                    onAction = { mutationScope.launch { runtime.refreshSource(sourceId) } },
-                )
-            }
-
-            if (browseState.catalogChannelCount == 0 && !loadingChannels) {
-                LiveConsumerEmptyState(
-                    failed = channelRefreshFailed,
-                    onRetry = { mutationScope.launch { runtime.refreshSource(sourceId) } },
-                    onOpenSettings = onOpenSettings,
-                    modifier = Modifier.weight(1f),
-                )
-            } else if (isTelevision) {
-                HierarchicalLiveBrowse(
-                    state = browseState,
-                    hierarchyLevel = effectiveHierarchyLevel,
-                    playingChannelId = preview?.request?.channelId,
-                    currentEpgByChannelId = currentEpgByChannelId,
-                    viewMode = liveViewMode,
-                    onViewModeSelected = { mode ->
-                        mutationScope.launch { viewModeStore.setLiveMode(mode) }
-                    },
-                    onSearchChange = browseSession::updateSearch,
-                    onCategorySelected = ::selectCategory,
-                    onFavoritesOnlyChanged = browseSession::setFavoritesOnly,
-                    onOrderChanged = browseSession::setOrder,
-                    onCustomGroupSelected = browseSession::selectCustomGroup,
-                    onChannelSelected = ::selectChannel,
-                    modifier = Modifier
-                        .weight(1f)
-                        .navigationBarsPadding(),
-                )
-            } else {
-                PortraitLiveBrowseWithViewModes(
-                    state = browseState,
-                    playingChannelId = preview?.request?.channelId,
-                    currentEpgByChannelId = currentEpgByChannelId,
-                    viewMode = liveViewMode,
-                    onViewModeSelected = { mode ->
-                        mutationScope.launch { viewModeStore.setLiveMode(mode) }
-                    },
-                    onSearchChange = browseSession::updateSearch,
-                    onCategorySelected = browseSession::selectCategory,
-                    onFavoritesOnlyChanged = browseSession::setFavoritesOnly,
-                    onOrderChanged = browseSession::setOrder,
-                    onCustomGroupSelected = browseSession::selectCustomGroup,
-                    onChannelSelected = ::selectChannel,
-                    modifier = Modifier
-                        .weight(1f)
-                        .navigationBarsPadding(),
-                )
-            }
-        }
-    }
 
     if (showEpgGuide && preview != null) {
         EpgGuideSheet(

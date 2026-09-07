@@ -1,46 +1,6 @@
 package app.ownplay.player.playback
 
 /**
- * Describes why Live playback entered the dedicated fullscreen surface.
- *
- * USER keeps fullscreen active until the user explicitly exits it.
- * ROTATION lets a Smartphone return to Preview when the device rotates back to portrait.
- */
-enum class LiveFullscreenEntryReason {
-    USER,
-    ROTATION,
-}
-
-/**
- * Single transition policy shared by portrait, landscape, and TV Live playback.
- * Device-specific input only decides whether rotation is allowed to request fullscreen;
- * the playback transition itself remains independent from device type.
- */
-object LivePlaybackPresentationPolicy {
-    fun shouldEnterFullscreenFromRotation(
-        rotationFullscreenEnabled: Boolean,
-        isLandscape: Boolean,
-        hasSelection: Boolean,
-        alreadyFullscreen: Boolean,
-    ): Boolean =
-        rotationFullscreenEnabled &&
-            isLandscape &&
-            hasSelection &&
-            !alreadyFullscreen
-
-    fun shouldReturnToPreviewFromRotation(
-        rotationFullscreenEnabled: Boolean,
-        isPortrait: Boolean,
-        entryReason: LiveFullscreenEntryReason?,
-        isFullscreen: Boolean,
-    ): Boolean =
-        rotationFullscreenEnabled &&
-            isPortrait &&
-            isFullscreen &&
-            entryReason == LiveFullscreenEntryReason.ROTATION
-}
-
-/**
  * Executes Live handoffs between independent Preview and Fullscreen surfaces.
  *
  * The departing PlayerView is always detached before Compose switches presentation. That leaves
@@ -76,7 +36,7 @@ object LivePlaybackSurfaceHandoff {
  * Stops Live while leaving its current presentation instead of handing off to another surface.
  * The departing PlayerView is detached before the stream is stopped and before Compose clears the
  * presentation state. This prevents a stale Live surface from being reused by a later bind.
- * VOD, Series, and PiP do not use this helper.
+ * VOD and Series do not use this helper.
  */
 object LivePlaybackSurfaceTeardown {
     fun stopAfterDetaching(

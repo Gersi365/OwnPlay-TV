@@ -1,12 +1,10 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,8 +39,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,9 +71,6 @@ internal fun OnDemandPlaybackSurface(
     onSeekPositionChanged: (Long) -> Unit,
 ) {
     val playbackControls = PlaybackPresentationPolicy.controlsFor(playbackState)
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val backFocusRequester = remember(contentKey) { FocusRequester() }
     val controlsFocusRequester = remember(contentKey) { FocusRequester() }
     val wakeFocusRequester = remember(contentKey) { FocusRequester() }
@@ -114,8 +107,7 @@ internal fun OnDemandPlaybackSurface(
         }
     }
 
-    LaunchedEffect(isTelevision, controlsVisible, playbackState, contentKey) {
-        if (!isTelevision) return@LaunchedEffect
+    LaunchedEffect(controlsVisible, playbackState, contentKey) {
         when {
             playbackState is PlaybackState.Failed -> backFocusRequester.requestFocus()
             controlsVisible -> controlsFocusRequester.requestFocus()
@@ -123,7 +115,7 @@ internal fun OnDemandPlaybackSurface(
         }
     }
 
-    val remoteWakeModifier = if (isTelevision && !controlsVisible) {
+    val remoteWakeModifier = if (!controlsVisible) {
         Modifier
             .focusRequester(wakeFocusRequester)
             .onKeyEvent { event ->
@@ -148,7 +140,6 @@ internal fun OnDemandPlaybackSurface(
                 .fillMaxSize()
                 .onPreviewKeyEvent { event ->
                     if (
-                        isTelevision &&
                         controlsVisible &&
                         event.nativeKeyEvent.isOnDemandRemoteNavigationKeyDown()
                     ) {
@@ -194,15 +185,6 @@ internal fun OnDemandPlaybackSurface(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(contentKey, controlsVisible) {
-                        detectTapGestures {
-                            if (controlsVisible) {
-                                controlsVisible = false
-                            } else {
-                                revealControls()
-                            }
-                        }
-                    }
                     .then(remoteWakeModifier),
             )
 

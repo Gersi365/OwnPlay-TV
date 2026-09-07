@@ -2,8 +2,6 @@ package app.ownplay.player.ui.live
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,11 +34,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,11 +46,8 @@ import app.ownplay.player.live.LiveCategory
 import app.ownplay.player.live.LiveChannelItem
 import app.ownplay.player.live.LiveCustomGroup
 import app.ownplay.player.personalization.ChannelBulkAction
-import app.ownplay.player.personalization.ChannelDragTarget
-import app.ownplay.player.personalization.ChannelDragTargetResolver
 import app.ownplay.player.personalization.ChannelEditState
 import app.ownplay.player.personalization.ManualOrderPlacement
-import app.ownplay.player.personalization.VisibleChannelBounds
 
 @Composable
 fun LiveBrowseScreen(
@@ -86,118 +79,9 @@ fun LiveBrowseScreen(
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
-    var draggedChannelId by remember { mutableStateOf<String?>(null) }
-    var draggedPointerY by remember { mutableStateOf<Float?>(null) }
-    var dragTarget by remember { mutableStateOf<ChannelDragTarget?>(null) }
-    var dragAutoScrollStep by remember { mutableStateOf(0f) }
-    val manualDragEnabled = editState.isEditing && state.query.order == LiveBrowseOrder.MY_ORDER
-    val favoriteDragEnabled = editState.isEditing &&
+    val favoriteOrderActions = editState.isEditing &&
         state.query.favoritesOnly &&
         state.query.order == LiveBrowseOrder.FAVORITE_ORDER
-    val dragEnabled = manualDragEnabled || favoriteDragEnabled
-    val draggableChannelIds = remember(state.channels) {
-        state.channels.map { channel -> channel.channelId }.toSet()
-    }
-
-    fun clearDragState() {
-        draggedChannelId = null
-        draggedPointerY = null
-        dragTarget = null
-        dragAutoScrollStep = 0f
-    }
-
-    LaunchedEffect(draggedChannelId, dragAutoScrollStep) {
-        val draggedId = draggedChannelId ?: return@LaunchedEffect
-        if (dragAutoScrollStep == 0f) return@LaunchedEffect
-        while (draggedChannelId == draggedId && dragAutoScrollStep != 0f) {
-            val consumed = listState.scrollBy(dragAutoScrollStep)
-            draggedPointerY?.let { pointerY ->
-                dragTarget = resolveDragTarget(
-                    pointerY = pointerY,
-                    draggedChannelId = draggedId,
-                    visibleItems = listState.layoutInfo.visibleItemsInfo,
-                    validChannelIds = draggableChannelIds,
-                )
-            }
-            if (consumed == 0f) {
-                dragAutoScrollStep = 0f
-                break
-            }
-            withFrameNanos { }
-        }
-    }
-
-    val channelDragModifier = if (dragEnabled) {
-        Modifier.pointerInput(draggableChannelIds, favoriteDragEnabled) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { start ->
-                    val itemInfo = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
-                        val channelId = info.key as? String
-                        channelId != null &&
-                            channelId in draggableChannelIds &&
-                            start.y >= info.offset &&
-                            start.y <= info.offset + info.size
-                    }
-                    val channelId = itemInfo?.key as? String
-                    if (channelId == null) {
-                        clearDragState()
-                    } else {
-                        draggedChannelId = channelId
-                        draggedPointerY = start.y
-                        dragAutoScrollStep = 0f
-                        dragTarget = resolveDragTarget(
-                            pointerY = start.y,
-                            draggedChannelId = channelId,
-                            visibleItems = listState.layoutInfo.visibleItemsInfo,
-                            validChannelIds = draggableChannelIds,
-                        )
-                    }
-                },
-                onDrag = { change, dragAmount ->
-                    change.consume()
-                    val draggedId = draggedChannelId ?: return@detectDragGesturesAfterLongPress
-                    val pointerY =
-                        (draggedPointerY ?: return@detectDragGesturesAfterLongPress) + dragAmount.y
-                    draggedPointerY = pointerY
-                    val layout = listState.layoutInfo
-                    dragAutoScrollStep = dragAutoScrollStepForPointer(
-                        pointerY = pointerY,
-                        viewportStartOffset = layout.viewportStartOffset,
-                        viewportEndOffset = layout.viewportEndOffset,
-                    )
-                    dragTarget = resolveDragTarget(
-                        pointerY = pointerY,
-                        draggedChannelId = draggedId,
-                        visibleItems = layout.visibleItemsInfo,
-                        validChannelIds = draggableChannelIds,
-                    )
-                },
-                onDragEnd = {
-                    val draggedId = draggedChannelId
-                    val target = dragTarget
-                    if (draggedId != null && target != null) {
-                        if (favoriteDragEnabled) {
-                            onFavoriteMoveRelative(
-                                draggedId,
-                                target.anchorChannelId,
-                                target.placement,
-                            )
-                        } else {
-                            onManualMoveRelative(
-                                draggedId,
-                                target.anchorChannelId,
-                                target.placement,
-                            )
-                        }
-                    }
-                    clearDragState()
-                },
-                onDragCancel = ::clearDragState,
-            )
-        }
-    } else {
-        Modifier
-    }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -205,9 +89,7 @@ fun LiveBrowseScreen(
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .then(channelDragModifier),
+            modifier = Modifier.fillMaxSize(),
         ) {
             item(key = "browse-header") {
                 LiveBrowseHeader(
@@ -227,7 +109,6 @@ fun LiveBrowseScreen(
                         if (editing && state.query.order != editOrder) {
                             onOrderChanged(editOrder)
                         }
-                        if (!editing) clearDragState()
                         onEditModeChanged(editing)
                     },
                 )
@@ -260,8 +141,7 @@ fun LiveBrowseScreen(
                         selectedCount = editState.selectedChannelIds.size,
                         selectedVisibleChannel = selectedVisibleChannel,
                         groups = state.customGroups,
-                        dragEnabled = dragEnabled,
-                        favoriteDragEnabled = favoriteDragEnabled,
+                        favoriteOrderActions = favoriteOrderActions,
                         onSelectVisible = onSelectVisible,
                         onClearSelection = onClearSelection,
                         onBulkAction = onBulkAction,
@@ -295,16 +175,14 @@ fun LiveBrowseScreen(
                     items = state.channels,
                     key = { _, channel -> channel.channelId },
                 ) { index, channel ->
-                    val isDropAnchor = dragTarget?.anchorChannelId == channel.channelId
-
                     LiveChannelRow(
                         channel = channel,
                         isEditing = editState.isEditing,
                         isSelected = channel.channelId in editState.selectedChannelIds,
                         isPlaying = channel.channelId == playingChannelId,
-                        isDragging = draggedChannelId == channel.channelId,
-                        dropPlacement = if (isDropAnchor) dragTarget?.placement else null,
-                        showDragHandle = dragEnabled,
+                        isDragging = false,
+                        dropPlacement = null,
+                        showDragHandle = false,
                         dragHandleModifier = Modifier,
                         onClick = { onChannelSelected(channel.channelId) },
                         onSelectionToggle = { onChannelSelectionToggle(channel.channelId) },
@@ -321,39 +199,6 @@ fun LiveBrowseScreen(
         }
     }
 }
-
-private fun dragAutoScrollStepForPointer(
-    pointerY: Float,
-    viewportStartOffset: Int,
-    viewportEndOffset: Int,
-): Float {
-    val edge = 88f
-    val step = 28f
-    return when {
-        pointerY < viewportStartOffset + edge -> -step
-        pointerY > viewportEndOffset - edge -> step
-        else -> 0f
-    }
-}
-
-private fun resolveDragTarget(
-    pointerY: Float,
-    draggedChannelId: String,
-    visibleItems: List<androidx.compose.foundation.lazy.LazyListItemInfo>,
-    validChannelIds: Set<String>,
-): ChannelDragTarget? = ChannelDragTargetResolver.resolve(
-    pointerY = pointerY,
-    draggedChannelId = draggedChannelId,
-    visibleItems = visibleItems.mapNotNull { item ->
-        val channelId = item.key as? String ?: return@mapNotNull null
-        if (channelId !in validChannelIds) return@mapNotNull null
-        VisibleChannelBounds(
-            channelId = channelId,
-            top = item.offset.toFloat(),
-            bottom = (item.offset + item.size).toFloat(),
-        )
-    },
-)
 
 @Composable
 private fun LiveBrowseHeader(
@@ -536,8 +381,7 @@ private fun BulkEditBar(
     selectedCount: Int,
     selectedVisibleChannel: LiveChannelItem?,
     groups: List<LiveCustomGroup>,
-    dragEnabled: Boolean,
-    favoriteDragEnabled: Boolean,
+    favoriteOrderActions: Boolean,
     onSelectVisible: () -> Unit,
     onClearSelection: () -> Unit,
     onBulkAction: (ChannelBulkAction) -> Unit,
@@ -577,17 +421,6 @@ private fun BulkEditBar(
             ) {
                 Text("Clear")
             }
-        }
-        if (dragEnabled) {
-            Text(
-                text = if (favoriteDragEnabled) {
-                    "Hold a channel, then drag to reorder Favorite order."
-                } else {
-                    "Hold a channel, then drag to reorder My Order."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
 
         LazyRow(
@@ -629,7 +462,7 @@ private fun BulkEditBar(
                 TextButton(
                     onClick = {
                         onBulkAction(
-                            if (favoriteDragEnabled) {
+                            if (favoriteOrderActions) {
                                 ChannelBulkAction.MoveFavoritesToTop
                             } else {
                                 ChannelBulkAction.MoveToTop
@@ -638,14 +471,14 @@ private fun BulkEditBar(
                     },
                     enabled = hasSelection,
                 ) {
-                    Text(if (favoriteDragEnabled) "Favorite top" else "Move top")
+                    Text(if (favoriteOrderActions) "Favorite top" else "Move top")
                 }
             }
             item(key = "move-bottom") {
                 TextButton(
                     onClick = {
                         onBulkAction(
-                            if (favoriteDragEnabled) {
+                            if (favoriteOrderActions) {
                                 ChannelBulkAction.MoveFavoritesToBottom
                             } else {
                                 ChannelBulkAction.MoveToBottom
@@ -654,7 +487,7 @@ private fun BulkEditBar(
                     },
                     enabled = hasSelection,
                 ) {
-                    Text(if (favoriteDragEnabled) "Favorite bottom" else "Move bottom")
+                    Text(if (favoriteOrderActions) "Favorite bottom" else "Move bottom")
                 }
             }
             item(key = "customize-channel") {

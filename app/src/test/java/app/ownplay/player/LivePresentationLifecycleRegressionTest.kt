@@ -54,7 +54,7 @@ class LivePresentationLifecycleRegressionTest {
 
     private companion object {
         val shellPaths = listOf(
-            "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
+            "src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
         )
     }
 }

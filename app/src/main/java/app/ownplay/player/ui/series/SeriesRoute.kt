@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.series
 
-import android.content.res.Configuration
 import androidx.annotation.OptIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +42,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -99,8 +97,6 @@ internal fun SeriesRoute(
     onFullscreenStateChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val featureRuntime = remember(context) { SeriesFeatureRuntime(context.applicationContext) }
     val downloadRuntime = remember(context) {
         OfflineDownloadFeatureRuntime(context.applicationContext)
@@ -452,48 +448,6 @@ internal fun SeriesRoute(
             (normalizedQuery.isBlank() || item.name.lowercase().contains(normalizedQuery))
     }
 
-    val portraitSelection = selectedSeries
-    if (!isLandscape && portraitSelection != null) {
-        SeriesDetailsPane(
-            selected = portraitSelection,
-            details = details,
-            loading = detailsLoading,
-            error = detailsError,
-            selectedSeasonNumber = selectedSeasonNumber,
-            selectedEpisodeId = selectedEpisodeId,
-            downloads = downloads,
-            focusBackOnEntry = true,
-            onSeasonSelected = {
-                selectedSeasonNumber = it
-                selectedEpisodeId = null
-                runtime.onDemandPresentationSession.updateSeriesSelection(it, null)
-            },
-            onEpisodeSelected = {
-                selectedEpisodeId = it
-                runtime.onDemandPresentationSession.updateSeriesSelection(selectedSeasonNumber, it)
-            },
-            onFavoriteChanged = { favorite ->
-                selectedSeries = portraitSelection.copy(isFavorite = favorite)
-                scope.launch {
-                    featureRuntime.setFavorite(sourceId, portraitSelection.seriesId, favorite)
-                }
-            },
-            onPlay = { episode -> playEpisode(episode, returnFocusToCatalog = false) },
-            onDownload = ::downloadEpisode,
-            onPauseDownload = ::pauseDownload,
-            onResumeDownload = ::resumeDownload,
-            onRetryDownload = ::retryDownload,
-            onRemoveDownload = ::removeDownload,
-            onClearProgress = { episode ->
-                scope.launch {
-                    featureRuntime.clearEpisodeProgress(sourceId, episode.episodeId)
-                }
-            },
-            onClose = ::closeSeriesLevel,
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
 
     Row(
         modifier = Modifier
@@ -595,16 +549,13 @@ private fun SeriesCatalogPane(
     onContinueEpisode: (SeriesEpisode) -> Unit,
     modifier: Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val catalogReturnFocusRequester = remember { FocusRequester() }
     val focusCategoryKey = selectedCategoryKey
         ?.takeIf { key -> catalog.categories.any { it.providerCategoryKey == key } }
         ?: catalog.categories.firstOrNull()?.providerCategoryKey
 
-    LaunchedEffect(isTelevision, restoreFocusOnEntry, focusCategoryKey) {
-        if (isTelevision && restoreFocusOnEntry) {
+    LaunchedEffect(restoreFocusOnEntry, focusCategoryKey) {
+        if (restoreFocusOnEntry) {
             catalogReturnFocusRequester.requestFocus()
         }
         if (restoreFocusOnEntry) {

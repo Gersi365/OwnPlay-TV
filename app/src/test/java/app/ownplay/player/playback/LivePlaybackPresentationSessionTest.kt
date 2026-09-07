@@ -15,50 +15,41 @@ class LivePlaybackPresentationSessionTest {
         assertEquals(selection, session.state.value.selection)
         assertEquals(LivePlaybackPresentationSurface.PREVIEW, session.state.value.surface)
         assertNull(session.state.value.fullscreenSelection)
-        assertNull(session.state.value.fullscreenEntryReason)
     }
 
     @Test
-    fun fullscreenStateRetainsRotationReasonForHostRecreation() {
+    fun fullscreenStateIsRetainedUntilExplicitlyChanged() {
         val session = LivePlaybackPresentationSession()
         val selection = selection(channelId = "one")
 
-        session.showFullscreen(
-            selection = selection,
-            entryReason = LiveFullscreenEntryReason.ROTATION,
-        )
+        session.showFullscreen(selection)
 
         assertEquals(selection, session.state.value.fullscreenSelection)
         assertEquals(LivePlaybackPresentationSurface.FULLSCREEN, session.state.value.surface)
-        assertEquals(LiveFullscreenEntryReason.ROTATION, session.state.value.fullscreenEntryReason)
     }
 
     @Test
     fun navigationReplacesSelectionWithoutChangingPresentation() {
         val session = LivePlaybackPresentationSession()
-        session.showFullscreen(
-            selection = selection(channelId = "one"),
-            entryReason = LiveFullscreenEntryReason.USER,
-        )
+        session.showFullscreen(selection(channelId = "one"))
         val next = selection(channelId = "two")
 
         session.replaceSelection(next)
 
         assertEquals(next, session.state.value.selection)
         assertEquals(LivePlaybackPresentationSurface.FULLSCREEN, session.state.value.surface)
-        assertEquals(LiveFullscreenEntryReason.USER, session.state.value.fullscreenEntryReason)
     }
 
     @Test
-    fun returningToPreviewDropsFullscreenOnlyMetadata() {
+    fun returningToPreviewKeepsSelectionAndChangesSurface() {
         val session = LivePlaybackPresentationSession()
         val selection = selection(channelId = "one")
-        session.showFullscreen(selection, LiveFullscreenEntryReason.USER)
+        session.showFullscreen(selection)
 
         session.showPreview(selection)
 
+        assertEquals(selection, session.state.value.selection)
         assertEquals(LivePlaybackPresentationSurface.PREVIEW, session.state.value.surface)
-        assertNull(session.state.value.fullscreenEntryReason)
     }
 
     @Test
@@ -70,7 +61,6 @@ class LivePlaybackPresentationSessionTest {
 
         assertNull(session.state.value.selection)
         assertNull(session.state.value.surface)
-        assertNull(session.state.value.fullscreenEntryReason)
     }
 
     private fun selection(channelId: String): LivePlaybackSelection = LivePlaybackSelection(

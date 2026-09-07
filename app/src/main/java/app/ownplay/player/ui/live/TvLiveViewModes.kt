@@ -1,6 +1,5 @@
 package app.ownplay.player.ui.live
 
-import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -66,7 +65,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,7 +90,7 @@ private const val MAX_CHANNEL_LOGO_BYTES = 2 * 1024 * 1024
 private const val MAX_CHANNEL_LOGO_EDGE_PX = 256
 
 @Composable
-internal fun PortraitLiveBrowseWithViewModes(
+internal fun TvLiveBrowseWithViewModes(
     state: LiveBrowseState,
     playingChannelId: String?,
     currentEpgByChannelId: Map<String, EpgProgram>,
@@ -110,9 +108,6 @@ internal fun PortraitLiveBrowseWithViewModes(
     showCategoryStrip: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val searchTriggerFocusRequester = remember { FocusRequester() }
     val searchFieldFocusRequester = remember { FocusRequester() }
     var searchExpanded by remember { mutableStateOf(false) }
@@ -126,20 +121,20 @@ internal fun PortraitLiveBrowseWithViewModes(
         }
     }
 
-    LaunchedEffect(searchExpanded, isTelevision) {
-        if (!isTelevision || !searchExpanded) return@LaunchedEffect
+    LaunchedEffect(searchExpanded) {
+        if (!searchExpanded) return@LaunchedEffect
         withFrameNanos { }
         searchFieldFocusRequester.requestFocus()
     }
 
-    LaunchedEffect(playingChannelId, isTelevision) {
-        if (isTelevision && playingChannelId != null) {
+    LaunchedEffect(playingChannelId) {
+        if (playingChannelId != null) {
             searchExpanded = false
         }
     }
 
     BackHandler(
-        enabled = isTelevision && searchExpanded && playingChannelId == null,
+        enabled = searchExpanded && playingChannelId == null,
     ) {
         onSearchChange("")
         searchExpanded = false
@@ -151,7 +146,7 @@ internal fun PortraitLiveBrowseWithViewModes(
             state = state,
             viewMode = viewMode,
             showSearch = showSearch,
-            tvFocusManagement = isTelevision,
+            tvFocusManagement = true,
             searchTriggerFocusRequester = searchTriggerFocusRequester,
             channelFocusRequester = channelFocusRequester,
             onToggleSearch = {
@@ -179,31 +174,23 @@ internal fun PortraitLiveBrowseWithViewModes(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp, vertical = 6.dp)
-                    .then(
-                        if (isTelevision) {
-                            Modifier
-                                .focusRequester(searchFieldFocusRequester)
-                                .onPreviewKeyEvent { event ->
-                                    when {
-                                        event.type == KeyEventType.KeyDown &&
-                                            event.key == Key.DirectionUp -> {
-                                            searchTriggerFocusRequester.requestFocus()
-                                            true
-                                        }
-                                        event.type == KeyEventType.KeyDown &&
-                                            event.key == Key.DirectionDown &&
-                                            state.channels.isNotEmpty() &&
-                                            channelFocusRequester != null -> {
-                                            channelFocusRequester.requestFocus()
-                                            true
-                                        }
-                                        else -> false
-                                    }
-                                }
-                        } else {
-                            Modifier
-                        },
-                    ),
+                    .focusRequester(searchFieldFocusRequester)
+                    .onPreviewKeyEvent { event ->
+                        when {
+                            event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp -> {
+                                searchTriggerFocusRequester.requestFocus()
+                                true
+                            }
+                            event.type == KeyEventType.KeyDown &&
+                                event.key == Key.DirectionDown &&
+                                state.channels.isNotEmpty() &&
+                                channelFocusRequester != null -> {
+                                channelFocusRequester.requestFocus()
+                                true
+                            }
+                            else -> false
+                        }
+                    },
                 singleLine = true,
                 placeholder = { Text("Search channels") },
                 shape = RoundedCornerShape(14.dp),
@@ -488,10 +475,7 @@ private fun LiveChannelView(
         return
     }
 
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
-    val cardMinSize = if (isTelevision) 176.dp else 156.dp
+    val cardMinSize = 176.dp
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
     var requesterChannelId by remember { mutableStateOf(focusChannelId) }

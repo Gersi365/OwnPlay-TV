@@ -9,7 +9,7 @@ import org.junit.Test
 
 class TvPlaylistRemoteActionsContractTest {
     private val tvSettingsSource = sourceText(
-        "src/tv/java/app/ownplay/player/ui/TvSettingsScreen.kt",
+        "src/main/java/app/ownplay/player/ui/TvSettingsScreen.kt",
     )
     private val wrapperSource = sourceText(
         "src/main/java/app/ownplay/player/ui/SettingsPlaylist.kt",
@@ -23,7 +23,6 @@ class TvPlaylistRemoteActionsContractTest {
         assertTrue(tvSettingsSource.contains("remoteFirstActions = true"))
         assertTrue(wrapperSource.contains("remoteFirstActions: Boolean = false"))
         assertTrue(wrapperSource.contains("remoteFirstActions = remoteFirstActions"))
-        assertFalse(wrapperSource.contains("UI_MODE_TYPE_TELEVISION"))
         assertFalse(wrapperSource.contains("LocalConfiguration"))
     }
 

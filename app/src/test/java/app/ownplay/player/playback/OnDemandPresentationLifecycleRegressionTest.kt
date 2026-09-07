@@ -9,7 +9,7 @@ import org.junit.Test
 class OnDemandPresentationLifecycleRegressionTest {
     @Test
     fun tvShellRestoresOnDemandRouteFromProcessSession() {
-        val tv = sourceText("src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt")
+        val tv = sourceText("src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt")
 
         listOf(tv).forEach { shell ->
             assertTrue(shell.contains("runtime.onDemandPresentationSession.state.collectAsState()"))

@@ -18,21 +18,17 @@ internal enum class LiveChannelActivationAction {
 
 internal object LiveBrowseHierarchyPolicy {
     fun initialLevel(
-        isTelevision: Boolean,
         hasPreview: Boolean = false,
-    ): LiveBrowseHierarchyLevel = if (isTelevision && !hasPreview) {
+    ): LiveBrowseHierarchyLevel = if (!hasPreview) {
         LiveBrowseHierarchyLevel.CATEGORIES
     } else {
         LiveBrowseHierarchyLevel.CHANNELS
     }
 
     fun ownsBack(
-        isTelevision: Boolean,
         hasPreview: Boolean,
         level: LiveBrowseHierarchyLevel,
-    ): Boolean = hasPreview || (
-        isTelevision && level == LiveBrowseHierarchyLevel.CHANNELS
-    )
+    ): Boolean = hasPreview || level == LiveBrowseHierarchyLevel.CHANNELS
 
     fun backAction(
         hasPreview: Boolean,
@@ -44,11 +40,10 @@ internal object LiveBrowseHierarchyPolicy {
     }
 
     fun channelActivationAction(
-        isTelevision: Boolean,
         activePreviewChannelId: String?,
         activatedChannelId: String,
     ): LiveChannelActivationAction = if (
-        isTelevision && activePreviewChannelId == activatedChannelId
+        activePreviewChannelId == activatedChannelId
     ) {
         LiveChannelActivationAction.OPEN_FULLSCREEN
     } else {

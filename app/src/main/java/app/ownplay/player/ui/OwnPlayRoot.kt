@@ -13,16 +13,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
-import app.ownplay.player.BuildConfig
 import app.ownplay.player.OwnPlayAppRuntime
 
 @Composable
 fun OwnPlayRoot(
     runtime: OwnPlayAppRuntime,
-    rotationFullscreenEnabled: Boolean = false,
     onPlaybackFullscreenChanged: (Boolean) -> Unit = {},
-    onPlaybackSurfaceActiveChanged: (Boolean) -> Unit = {},
-    onLivePreviewActiveChanged: (Boolean) -> Unit = {},
 ) {
     var contentVisible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -35,8 +31,8 @@ fun OwnPlayRoot(
         contentVisible = true
     }
 
-    LaunchedEffect(BuildConfig.IS_TV_BUILD, contentVisible) {
-        if (BuildConfig.IS_TV_BUILD && contentVisible) {
+    LaunchedEffect(contentVisible) {
+        if (contentVisible) {
             withFrameNanos { }
             if (!focusManager.moveFocus(FocusDirection.Next)) {
                 withFrameNanos { }
@@ -49,12 +45,9 @@ fun OwnPlayRoot(
         visible = contentVisible,
         enter = fadeIn(animationSpec = tween(durationMillis = 140)),
     ) {
-        TargetOwnPlayApp(
+        TVOwnPlayApp(
             runtime = runtime,
-            rotationFullscreenEnabled = rotationFullscreenEnabled,
             onPlaybackFullscreenChanged = onPlaybackFullscreenChanged,
-            onPlaybackSurfaceActiveChanged = onPlaybackSurfaceActiveChanged,
-            onLivePreviewActiveChanged = onLivePreviewActiveChanged,
         )
     }
 }

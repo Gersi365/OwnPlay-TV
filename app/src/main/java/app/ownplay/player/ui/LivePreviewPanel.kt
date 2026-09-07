@@ -1,11 +1,8 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -19,14 +16,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -42,10 +34,9 @@ import app.ownplay.player.playback.PlaybackVideoOutput
 /**
  * Live Preview is deliberately presentation-only.
  *
- * No playback/navigation/fullscreen/close buttons are rendered on either mobile or TV. TV keeps
- * focus in the channel browser so a second OK on the selected channel can open fullscreen. Mobile
- * gets a transparent tap target above PlayerView so tapping video opens fullscreen without adding a
- * visible control layer. Back/ESC ownership remains in LiveRoute so Preview closes first.
+ * No playback/navigation/fullscreen/close buttons are rendered. Focus stays in the channel
+ * browser so a second OK on the selected channel can open fullscreen. Back/ESC ownership remains
+ * in LiveRoute so Preview closes first.
  */
 @Suppress("UNUSED_PARAMETER")
 @OptIn(UnstableApi::class)
@@ -63,11 +54,7 @@ internal fun LivePreviewPanel(
     modifier: Modifier = Modifier,
     showLiveBadge: Boolean = true,
 ) {
-    val configuration = LocalConfiguration.current
-    val isTelevision =
-        configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
     val controls = PlaybackPresentationPolicy.controlsFor(state)
-    val interactionSource = remember { MutableInteractionSource() }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -98,22 +85,6 @@ internal fun LivePreviewPanel(
                 onRelease = { view -> videoOutput.unbind(view) },
             )
 
-            if (!isTelevision) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .semantics {
-                            contentDescription = "Live preview, ${selection.displayName}"
-                        }
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            role = Role.Button,
-                            onClickLabel = "Open full view",
-                            onClick = onOpenFullscreen,
-                        ),
-                )
-            }
 
             if (showLiveBadge) {
                 Surface(

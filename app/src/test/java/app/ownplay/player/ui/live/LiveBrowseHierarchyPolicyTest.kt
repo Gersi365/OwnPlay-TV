@@ -7,63 +7,39 @@ import org.junit.Test
 
 class LiveBrowseHierarchyPolicyTest {
     @Test
-    fun `tv starts at categories while non tv starts at channels`() {
+    fun `browse starts at categories when preview is closed`() {
         assertEquals(
             LiveBrowseHierarchyLevel.CATEGORIES,
-            LiveBrowseHierarchyPolicy.initialLevel(isTelevision = true),
-        )
-        assertEquals(
-            LiveBrowseHierarchyLevel.CHANNELS,
-            LiveBrowseHierarchyPolicy.initialLevel(isTelevision = false),
+            LiveBrowseHierarchyPolicy.initialLevel(),
         )
     }
 
     @Test
-    fun `tv with active preview restores channel hierarchy`() {
+    fun `active preview restores channel hierarchy`() {
         assertEquals(
             LiveBrowseHierarchyLevel.CHANNELS,
-            LiveBrowseHierarchyPolicy.initialLevel(
-                isTelevision = true,
-                hasPreview = true,
-            ),
+            LiveBrowseHierarchyPolicy.initialLevel(hasPreview = true),
         )
     }
 
     @Test
-    fun `preview owns back on every device while hierarchy back remains tv only`() {
+    fun `preview or channel hierarchy owns back while category root propagates`() {
         assertTrue(
             LiveBrowseHierarchyPolicy.ownsBack(
-                isTelevision = true,
                 hasPreview = true,
                 level = LiveBrowseHierarchyLevel.CATEGORIES,
             ),
         )
         assertTrue(
             LiveBrowseHierarchyPolicy.ownsBack(
-                isTelevision = false,
-                hasPreview = true,
-                level = LiveBrowseHierarchyLevel.CHANNELS,
-            ),
-        )
-        assertTrue(
-            LiveBrowseHierarchyPolicy.ownsBack(
-                isTelevision = true,
                 hasPreview = false,
                 level = LiveBrowseHierarchyLevel.CHANNELS,
             ),
         )
         assertFalse(
             LiveBrowseHierarchyPolicy.ownsBack(
-                isTelevision = true,
                 hasPreview = false,
                 level = LiveBrowseHierarchyLevel.CATEGORIES,
-            ),
-        )
-        assertFalse(
-            LiveBrowseHierarchyPolicy.ownsBack(
-                isTelevision = false,
-                hasPreview = false,
-                level = LiveBrowseHierarchyLevel.CHANNELS,
             ),
         )
     }
@@ -109,11 +85,10 @@ class LiveBrowseHierarchyPolicyTest {
     }
 
     @Test
-    fun `first tv ok opens preview and second ok on same channel opens fullscreen`() {
+    fun `first ok opens preview and second ok on same channel opens fullscreen`() {
         assertEquals(
             LiveChannelActivationAction.OPEN_PREVIEW,
             LiveBrowseHierarchyPolicy.channelActivationAction(
-                isTelevision = true,
                 activePreviewChannelId = null,
                 activatedChannelId = "channel-7",
             ),
@@ -121,7 +96,6 @@ class LiveBrowseHierarchyPolicyTest {
         assertEquals(
             LiveChannelActivationAction.OPEN_FULLSCREEN,
             LiveBrowseHierarchyPolicy.channelActivationAction(
-                isTelevision = true,
                 activePreviewChannelId = "channel-7",
                 activatedChannelId = "channel-7",
             ),
@@ -129,25 +103,12 @@ class LiveBrowseHierarchyPolicyTest {
     }
 
     @Test
-    fun `tv ok on another channel replaces preview instead of opening fullscreen`() {
+    fun `ok on another channel replaces preview instead of opening fullscreen`() {
         assertEquals(
             LiveChannelActivationAction.OPEN_PREVIEW,
             LiveBrowseHierarchyPolicy.channelActivationAction(
-                isTelevision = true,
                 activePreviewChannelId = "channel-7",
                 activatedChannelId = "channel-8",
-            ),
-        )
-    }
-
-    @Test
-    fun `non tv repeated activation remains preview behavior`() {
-        assertEquals(
-            LiveChannelActivationAction.OPEN_PREVIEW,
-            LiveBrowseHierarchyPolicy.channelActivationAction(
-                isTelevision = false,
-                activePreviewChannelId = "channel-7",
-                activatedChannelId = "channel-7",
             ),
         )
     }

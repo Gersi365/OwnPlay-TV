@@ -69,7 +69,7 @@ class ShellLifecycleRegressionTest {
     @Test
     fun tvLiveSyncStatusIsScopedToDisplayedSource() {
         listOf(
-            "src/tv/java/app/ownplay/player/ui/LiveRoute.kt",
+            "src/main/java/app/ownplay/player/ui/LiveRoute.kt",
         ).forEach { path ->
             val normalized = normalizedSource(sourceText(path))
             assertTrue(
@@ -82,7 +82,7 @@ class ShellLifecycleRegressionTest {
     @Test
     fun tvBackHierarchyFallsThroughToExitOnlyAtLiveRoot() {
         listOf(
-            "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt" to "TVSection",
+            "src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt" to "TVSection",
         ).forEach { (path, sectionType) ->
             val source = sourceText(path)
             assertTrue("$path must install a Compose back handler", source.contains("import androidx.activity.compose.BackHandler"))
@@ -109,7 +109,7 @@ class ShellLifecycleRegressionTest {
 
     private companion object {
         val activeShellPaths = listOf(
-            "src/tv/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
+            "src/main/java/app/ownplay/player/ui/TVOwnPlayApp.kt",
         )
     }
 }

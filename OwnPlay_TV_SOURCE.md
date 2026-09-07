@@ -45,6 +45,12 @@ Target devices:
 - Google TV;
 - compatible Android TV boxes.
 
+## TV-Only Build & Form-Factor Invariant
+
+`OwnPlay-TV` is a single-target TV project. It must not contain a mobile application flavor, mobile package identity, smartphone runtime profile, touch-first fallback shell, or a separate mobile source set.
+
+The application has no user-selectable or runtime portrait/landscape mode. The TV activity is statically fixed to landscape in the manifest because that is a device invariant, not a presentation choice. Product UI must not branch between portrait and landscape layouts.
+
 ---
 
 # 2. Technology Baseline

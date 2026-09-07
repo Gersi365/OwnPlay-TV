@@ -1,6 +1,5 @@
 package app.ownplay.player.ui
 
-import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +22,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -37,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.ownplay.player.OwnPlayAppRuntime
@@ -77,25 +74,6 @@ private enum class TVSection {
 internal fun TVOwnPlayApp(
     runtime: OwnPlayAppRuntime,
     onPlaybackFullscreenChanged: (Boolean) -> Unit,
-    onPlaybackSurfaceActiveChanged: (Boolean) -> Unit,
-    onLivePreviewActiveChanged: (Boolean) -> Unit,
-) {
-    TVConfigurationBoundary {
-        TVOwnPlayAppContent(
-            runtime = runtime,
-            onPlaybackFullscreenChanged = onPlaybackFullscreenChanged,
-            onPlaybackSurfaceActiveChanged = onPlaybackSurfaceActiveChanged,
-            onLivePreviewActiveChanged = onLivePreviewActiveChanged,
-        )
-    }
-}
-
-@Composable
-private fun TVOwnPlayAppContent(
-    runtime: OwnPlayAppRuntime,
-    onPlaybackFullscreenChanged: (Boolean) -> Unit,
-    onPlaybackSurfaceActiveChanged: (Boolean) -> Unit,
-    onLivePreviewActiveChanged: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val activePlaylistStore = remember(context) {
@@ -315,12 +293,6 @@ private fun TVOwnPlayAppContent(
         section == TVSection.LIVE &&
             activeSelection != null &&
             fullscreenSelection == null
-    val playbackSurfaceActive =
-        previewActive ||
-            fullscreenSelection != null ||
-            vodFullscreen ||
-            seriesFullscreen ||
-            libraryFullscreen
     val observedLiveTransitionTarget =
         fullscreenSelection?.let(LivePlaybackTransitionTarget::fullscreen)
             ?: if (previewActive) {
@@ -333,13 +305,6 @@ private fun TVOwnPlayAppContent(
         liveTransitionGate.reconcileObserved(observedLiveTransitionTarget)
     }
 
-    LaunchedEffect(playbackSurfaceActive) {
-        onPlaybackSurfaceActiveChanged(playbackSurfaceActive)
-    }
-    LaunchedEffect(previewActive) {
-        // TV never opts into rotation-driven fullscreen; keep the activity callback explicitly off.
-        onLivePreviewActiveChanged(false)
-    }
     LaunchedEffect(fullscreenSelection != null) {
         onPlaybackFullscreenChanged(fullscreenSelection != null)
     }
@@ -664,19 +629,4 @@ private fun TVNoSourceScreen(
             Text("Open Settings")
         }
     }
-}
-
-@Composable
-private fun TVConfigurationBoundary(content: @Composable () -> Unit) {
-    val current = LocalConfiguration.current
-    val tvConfiguration = Configuration(current).apply {
-        orientation = Configuration.ORIENTATION_LANDSCAPE
-        uiMode =
-            (uiMode and Configuration.UI_MODE_TYPE_MASK.inv()) or
-                Configuration.UI_MODE_TYPE_TELEVISION
-    }
-    CompositionLocalProvider(
-        LocalConfiguration provides tvConfiguration,
-        content = content,
-    )
 }
