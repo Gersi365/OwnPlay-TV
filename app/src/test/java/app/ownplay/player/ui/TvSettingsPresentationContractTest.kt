@@ -3,6 +3,7 @@ package app.ownplay.player.ui
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,15 +27,9 @@ class TvSettingsPresentationContractTest {
 
     @Test
     fun tvRootContainsOnlyApprovedDestinationsInOrder() {
-        assertTrue(
-            tvSettingsSource.contains(
-                "private enum class TvSettingsDestination {\n" +
-                    "    PLAYLISTS,\n" +
-                    "    LIVE_MANAGEMENT,\n" +
-                    "    BACKUP_RESTORE,\n" +
-                    "    ABOUT,\n" +
-                    "}",
-            ),
+        assertEquals(
+            listOf("PLAYLISTS", "LIVE_MANAGEMENT", "BACKUP_RESTORE", "ABOUT"),
+            TvSettingsDestination.entries.map { it.name },
         )
         assertTrue(tvSettingsSource.contains("title = \"Playlists\""))
         assertTrue(tvSettingsSource.contains("title = \"Live Management\""))

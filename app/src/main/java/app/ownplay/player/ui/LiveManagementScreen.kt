@@ -41,6 +41,7 @@ import app.ownplay.player.personalization.ChannelEditState
 import app.ownplay.player.personalization.FavoriteMutationResult
 import app.ownplay.player.personalization.ManualOrderMutationResult
 import app.ownplay.player.personalization.ManualOrderPlacement
+import app.ownplay.player.source.selection.resolveActivePlaylistId
 import app.ownplay.player.ui.live.LiveBrowseScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -54,10 +55,18 @@ internal fun LiveManagementScreen(
 ) {
     val backFocusRequester = remember { FocusRequester() }
     val primaryFocusRequester = remember { FocusRequester() }
-    var sourceId by remember(summaries) {
-        mutableStateOf(summaries.firstOrNull()?.sourceId)
+    var sourceId by remember {
+        mutableStateOf<String?>(null)
     }
-    val selectedSourceId = sourceId
+    val selectedSourceId = resolveActivePlaylistId(
+        persistedSourceId = null,
+        currentSourceId = sourceId,
+        enabledSourceIds = summaries.map { it.sourceId },
+    )
+
+    LaunchedEffect(selectedSourceId) {
+        sourceId = selectedSourceId
+    }
 
     LaunchedEffect(focusPrimaryOnEntry, selectedSourceId) {
         if (focusPrimaryOnEntry) {

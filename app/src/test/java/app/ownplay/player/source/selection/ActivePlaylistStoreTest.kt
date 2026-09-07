@@ -51,4 +51,29 @@ class ActivePlaylistStoreTest {
             ),
         )
     }
+
+    @Test
+    fun currentManagementSourceSurvivesCatalogReordering() {
+        for (sourceIds in listOf(
+            listOf("source-a", "source-b"),
+            listOf("new-source", "source-a", "source-b"),
+            listOf("source-b", "source-a"),
+        )) {
+            assertEquals(
+                "source-b",
+                resolveActivePlaylistId(null, "source-b", sourceIds),
+            )
+        }
+    }
+
+    @Test
+    fun removedManagementSourceFallsBackWithoutReselectingItWhenItReturns() {
+        val fallback = resolveActivePlaylistId(null, "source-b", listOf("source-a"))
+        assertEquals("source-a", fallback)
+        assertEquals(
+            "source-a",
+            resolveActivePlaylistId(null, fallback, listOf("source-b", "source-a")),
+        )
+        assertNull(resolveActivePlaylistId(null, fallback, emptyList()))
+    }
 }

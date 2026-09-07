@@ -35,6 +35,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,7 +49,7 @@ import app.ownplay.player.source.SourceSyncState
 
 private val TV_SETTINGS_ROW_HEIGHT = 72.dp
 
-private enum class TvSettingsDestination {
+internal enum class TvSettingsDestination {
     PLAYLISTS,
     LIVE_MANAGEMENT,
     BACKUP_RESTORE,
@@ -152,7 +153,7 @@ internal fun TvSettingsScreen(
 }
 
 @Composable
-private fun TvSettingsRoot(
+internal fun TvSettingsRoot(
     summaries: List<PlaylistSourceSummary>,
     disabledSourceIds: Set<String>,
     initialFocusedDestination: TvSettingsDestination,
@@ -175,7 +176,8 @@ private fun TvSettingsRoot(
         Column(
             modifier = Modifier
                 .width(360.dp)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
@@ -189,8 +191,9 @@ private fun TvSettingsRoot(
                 icon = Icons.Filled.Folder,
                 title = "Playlists",
                 detail = "$availableCount available",
-                focused = focusedDestination == TvSettingsDestination.PLAYLISTS,
                 focusRequester = focusRequesters.getValue(TvSettingsDestination.PLAYLISTS),
+                previousFocusRequester = FocusRequester.Cancel,
+                nextFocusRequester = focusRequesters.getValue(TvSettingsDestination.LIVE_MANAGEMENT),
                 onFocused = { focusedDestination = TvSettingsDestination.PLAYLISTS },
                 onClick = { onOpen(TvSettingsDestination.PLAYLISTS) },
             )
@@ -198,8 +201,9 @@ private fun TvSettingsRoot(
                 icon = Icons.Filled.Tune,
                 title = "Live Management",
                 detail = "Categories & channels",
-                focused = focusedDestination == TvSettingsDestination.LIVE_MANAGEMENT,
                 focusRequester = focusRequesters.getValue(TvSettingsDestination.LIVE_MANAGEMENT),
+                previousFocusRequester = focusRequesters.getValue(TvSettingsDestination.PLAYLISTS),
+                nextFocusRequester = focusRequesters.getValue(TvSettingsDestination.BACKUP_RESTORE),
                 onFocused = { focusedDestination = TvSettingsDestination.LIVE_MANAGEMENT },
                 onClick = { onOpen(TvSettingsDestination.LIVE_MANAGEMENT) },
             )
@@ -207,8 +211,9 @@ private fun TvSettingsRoot(
                 icon = Icons.Filled.Save,
                 title = "Backup & Restore",
                 detail = "Personalization",
-                focused = focusedDestination == TvSettingsDestination.BACKUP_RESTORE,
                 focusRequester = focusRequesters.getValue(TvSettingsDestination.BACKUP_RESTORE),
+                previousFocusRequester = focusRequesters.getValue(TvSettingsDestination.LIVE_MANAGEMENT),
+                nextFocusRequester = focusRequesters.getValue(TvSettingsDestination.ABOUT),
                 onFocused = { focusedDestination = TvSettingsDestination.BACKUP_RESTORE },
                 onClick = { onOpen(TvSettingsDestination.BACKUP_RESTORE) },
             )
@@ -216,8 +221,9 @@ private fun TvSettingsRoot(
                 icon = Icons.Filled.Info,
                 title = "About",
                 detail = BuildConfig.VERSION_NAME,
-                focused = focusedDestination == TvSettingsDestination.ABOUT,
                 focusRequester = focusRequesters.getValue(TvSettingsDestination.ABOUT),
+                previousFocusRequester = focusRequesters.getValue(TvSettingsDestination.BACKUP_RESTORE),
+                nextFocusRequester = FocusRequester.Cancel,
                 onFocused = { focusedDestination = TvSettingsDestination.ABOUT },
                 onClick = { onOpen(TvSettingsDestination.ABOUT) },
             )
@@ -240,17 +246,25 @@ private fun TvSettingsRootRow(
     icon: ImageVector,
     title: String,
     detail: String,
-    focused: Boolean,
     focusRequester: FocusRequester,
+    previousFocusRequester: FocusRequester,
+    nextFocusRequester: FocusRequester,
     onFocused: () -> Unit,
     onClick: () -> Unit,
 ) {
+    var focused by remember { mutableStateOf(false) }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(TV_SETTINGS_ROW_HEIGHT)
             .focusRequester(focusRequester)
+            .focusProperties {
+                up = previousFocusRequester
+                down = nextFocusRequester
+            }
             .onFocusChanged { state ->
+                focused = state.isFocused
                 if (state.isFocused) onFocused()
             }
             .clickable(onClick = onClick),
