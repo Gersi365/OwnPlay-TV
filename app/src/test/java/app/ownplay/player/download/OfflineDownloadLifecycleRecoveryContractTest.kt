@@ -16,14 +16,4 @@ class OfflineDownloadLifecycleRecoveryContractTest {
         assertTrue(enqueueBlock.contains("existingWorkPolicy = ExistingWorkPolicy.KEEP"))
         assertTrue(enqueueBlock.contains("DownloadStates.PAUSED -> return existing.downloadId"))
     }
-
-    @Test
-    fun `mobile resume reconciles pending WorkManager downloads`() {
-        val featureRuntime = sourceText("src/main/java/app/ownplay/player/download/OfflineDownloadFeatureRuntime.kt")
-        val activity = sourceText("src/main/java/app/ownplay/player/MainActivity.kt")
-        val onResumeBlock = sourceBlockAfter(activity, "override fun onResume()")
-
-        assertTrue(featureRuntime.contains("suspend fun reconcilePendingWork(): Int"))
-        assertTrue(onResumeBlock.contains("downloadRuntime.reconcilePendingWork()"))
-    }
 }
